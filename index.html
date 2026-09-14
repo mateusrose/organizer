@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
@@ -8,6 +8,22 @@
     <meta name="description" content="Personal study planner for asynchronous university courses." />
     <title>Semestre</title>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script>
+      // Apply the saved theme before first paint. React reconciles this again
+      // in an effect, but that runs too late to stop a full-screen flash.
+      (function () {
+        var theme = 'dark'
+        try {
+          var raw = localStorage.getItem('semestre.db.v1')
+          if (raw) theme = JSON.parse(raw).settings.theme === 'light' ? 'light' : 'dark'
+        } catch (e) {
+          /* private window, blocked storage, or a half-written payload */
+        }
+        document.documentElement.className = theme
+        var meta = document.querySelector('meta[name="theme-color"]')
+        if (meta) meta.setAttribute('content', theme === 'light' ? '#f7f7f9' : '#08080c')
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { cn } from '../../lib/cn'
@@ -21,15 +21,50 @@ export function Modal({
   footer?: ReactNode
   size?: 'sm' | 'md' | 'lg'
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+
+    // The dialog is portalled to the end of <body>, so without a trap the whole
+    // page stays in the tab order in front of it.
+    const focusables = () =>
+      Array.from(
+        dialogRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((el) => el.offsetParent !== null || el === document.activeElement)
+
+    const restoreTo = document.activeElement as HTMLElement | null
+    const first = focusables().find((el) => !el.hasAttribute('data-autofocus-skip'))
+    ;(first ?? dialogRef.current)?.focus()
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const list = focusables()
+      if (list.length === 0) {
+        e.preventDefault()
+        dialogRef.current?.focus()
+        return
+      }
+      const edge = e.shiftKey ? list[0] : list[list.length - 1]
+      if (document.activeElement === edge || !dialogRef.current?.contains(document.activeElement)) {
+        e.preventDefault()
+        ;(e.shiftKey ? list[list.length - 1] : list[0]).focus()
+      }
+    }
+
     document.addEventListener('keydown', onKey)
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = prev
+      restoreTo?.focus?.()
     }
   }, [open, onClose])
 
@@ -45,6 +80,8 @@ export function Modal({
         aria-hidden
       />
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={typeof title === 'string' ? title : undefined}

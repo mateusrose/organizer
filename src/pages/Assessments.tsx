@@ -871,7 +871,7 @@ function AssessmentModal({
             type="number"
             min={0}
             max={100}
-            step={0.5}
+            step="any"
             inputMode="decimal"
             value={form.weight}
             onChange={(e) => set('weight', e.target.value)}
@@ -889,7 +889,7 @@ function AssessmentModal({
             id={`${fid}-hours`}
             type="number"
             min={0}
-            step={0.5}
+            step="any"
             inputMode="decimal"
             value={form.estimatedHours}
             onChange={(e) => set('estimatedHours', e.target.value)}
@@ -909,7 +909,7 @@ function AssessmentModal({
               type="number"
               min={0}
               max={scale.max}
-              step={0.1}
+              step="any"
               inputMode="decimal"
               value={form.grade}
               onChange={(e) => set('grade', e.target.value)}

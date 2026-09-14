@@ -84,7 +84,9 @@ export function computeCourseGrade(
   const remainingWeight = (100 - gw) / 100
   const unassignedWeight = Math.max(0, 100 - gradedWeight - pendingWeight)
 
-  const currentAverage = gw > EPS ? earned / (gw / 100) : null
+  // Divide by the REAL graded weight, not the clamped one: with weights that
+  // over-allocate past 100% the clamped value stops being an average at all.
+  const currentAverage = gradedWeight > EPS ? clamp(earned / (gradedWeight / 100), 0, max) : null
   const projected =
     currentAverage === null ? null : clamp(earned + currentAverage * remainingWeight, 0, max)
   const best = clamp(earned + max * remainingWeight, 0, max)

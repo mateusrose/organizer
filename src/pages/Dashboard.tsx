@@ -5,7 +5,7 @@ import { usePreferences, useSettings } from '../store/useStore'
 import { useScope } from '../store/scope'
 import { semesterAverage } from '../lib/grades'
 import { plannedHoursByAssessment } from '../lib/scheduler'
-import { addDays, hoursBetween, isWithin, toDate, weekRange } from '../lib/date'
+import { addDays, hoursBetween, isWithin, startOfDay, toDate, weekRange } from '../lib/date'
 import { EmptyState, PageHeader } from '../components/ui'
 import { GreetingStrip } from '../components/dashboard/GreetingStrip'
 import { StatRow } from '../components/dashboard/StatRow'
@@ -28,7 +28,12 @@ export default function Dashboard() {
     const until = addDays(now, 7)
     const open = assessments.filter((a) => a.status !== 'submitted' && a.status !== 'graded')
     return {
-      dueThisWeek: open.filter((a) => toDate(a.dueAt) <= until).length,
+      // Bounded at both ends — without a lower bound every past-due item was
+      // also counted as upcoming, double-reporting it alongside `overdue`.
+      dueThisWeek: open.filter((a) => {
+        const due = toDate(a.dueAt)
+        return due >= startOfDay(now) && due <= until
+      }).length,
       overdue: open.filter((a) => toDate(a.dueAt) < now).length,
     }
   }, [assessments, now])
@@ -54,7 +59,15 @@ export default function Dashboard() {
 
   const plannedByAssessment = useMemo(() => plannedHoursByAssessment(studyBlocks), [studyBlocks])
 
-  if (courses.length === 0) {
+  // Study blocks can exist without a course, so only a genuinely empty
+  // database gets the onboarding screen.
+  const nothingAtAll =
+    courses.length === 0 &&
+    assessments.length === 0 &&
+    tasks.length === 0 &&
+    studyBlocks.length === 0
+
+  if (nothingAtAll) {
     return (
       <>
         <PageHeader

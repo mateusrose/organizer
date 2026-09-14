@@ -25,8 +25,10 @@ export default function App() {
       ?.setAttribute('content', settings.theme === 'dark' ? '#08080c' : '#f7f7f9')
   }, [settings.theme])
 
+  // Always call it — init has its own empty-id branch that tears the client
+  // down. Guarding here left a cleared client id reporting "ready".
   useEffect(() => {
-    if (settings.googleClientId) initGoogle(settings.googleClientId)
+    initGoogle(settings.googleClientId ?? '')
   }, [settings.googleClientId, initGoogle])
 
   return (

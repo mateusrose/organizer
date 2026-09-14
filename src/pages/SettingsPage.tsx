@@ -42,6 +42,7 @@ import {
 import { useDb, useSettings, useStore } from '../store/useStore'
 import { useGoogle } from '../store/useGoogle'
 import { toast } from '../store/useToast'
+import { looksLikeBackup } from '../lib/db'
 import { format, relative } from '../lib/date'
 import type { SyncState } from '../types'
 import { cn } from '../lib/cn'
@@ -205,7 +206,9 @@ export default function SettingsPage() {
     if (!file) return
     try {
       const parsed: unknown = JSON.parse(await file.text())
-      if (!parsed || typeof parsed !== 'object') throw new Error('not an object')
+      // Any JSON object used to pass here and then wipe the database, because
+      // migrate() fills in empty collections for whatever it cannot find.
+      if (!looksLikeBackup(parsed)) throw new Error('not a Semestre backup')
       setPendingImport(parsed)
       setDialog('import')
     } catch {
@@ -702,7 +705,14 @@ export default function SettingsPage() {
           toast.success('Backup imported')
         }}
         title="Import this backup?"
-        message="The file replaces everything currently in this browser. Export the current data first if you might want it back."
+        message={
+          <>
+            <span className="block">
+              This file holds {describeBackup(pendingImport)}. It replaces everything currently in
+              this browser — export the current data first if you might want it back.
+            </span>
+          </>
+        }
         confirmLabel="Import"
       />
 
@@ -844,4 +854,23 @@ const formatBytes = (n: number): string => {
   if (n < 1024) return `${n} bytes`
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`
   return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+/** "12 courses, 40 assessments and 8 tasks" — so a wrong file is obvious. */
+function describeBackup(input: unknown): string {
+  if (!input || typeof input !== 'object') return 'nothing recognisable'
+  const db = input as Record<string, unknown>
+  const count = (key: string) => (Array.isArray(db[key]) ? (db[key] as unknown[]).length : 0)
+  const parts = [
+    [count('courses'), 'course'],
+    [count('assessments'), 'assessment'],
+    [count('themes'), 'theme'],
+    [count('tasks'), 'task'],
+  ] as const
+  const said = parts
+    .filter(([n]) => n > 0)
+    .map(([n, noun]) => `${n} ${noun}${n === 1 ? '' : 's'}`)
+  if (said.length === 0) return 'no courses, assessments or tasks'
+  if (said.length === 1) return said[0]
+  return `${said.slice(0, -1).join(', ')} and ${said[said.length - 1]}`
 }

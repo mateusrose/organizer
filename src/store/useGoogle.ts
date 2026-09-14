@@ -65,6 +65,13 @@ const handleToken = (response: GoogleTokenResponse) => {
     accessToken: response.access_token,
     expiresAt: Date.now() + seconds * 1000,
   }
+  // Nothing is waiting for this: the user signed out while the popup was open.
+  // Storing it would resurrect the session, so revoke it instead.
+  if (!pending) {
+    revoke(result.accessToken)
+    useGoogle.setState({ connecting: false })
+    return
+  }
   useGoogle.setState({
     accessToken: result.accessToken,
     expiresAt: result.expiresAt,
@@ -119,21 +126,51 @@ const requestTokenAsync = (consent: boolean): Promise<TokenResult> =>
 /**
  * A valid access token, requested silently when the cached one is gone or stale.
  * Throws a message that is safe to show the user.
+ *
+ * The refresh is memoised: a Drive sync and a Calendar sync fired together would
+ * otherwise have the second one rejected by `requestTokenAsync`'s in-flight
+ * guard, and be reported as an expired session.
  */
+let refreshing: Promise<string> | null = null
+
 const ensureToken = async (): Promise<string> => {
   const { accessToken, expiresAt } = useGoogle.getState()
   if (accessToken && expiresAt && expiresAt - SKEW_MS > Date.now()) return accessToken
+  if (refreshing) return refreshing
 
-  try {
-    const result = await requestTokenAsync(false)
-    saveSession({ ...result, profile: useGoogle.getState().profile })
-    useGoogle.setState({ signedIn: true, error: null })
-    return result.accessToken
-  } catch {
-    clearSession()
-    useGoogle.setState({ signedIn: false, accessToken: null, expiresAt: null })
-    throw new Error('Your Google session expired. Connect the account again to keep syncing.')
-  }
+  refreshing = (async () => {
+    try {
+      const result = await requestTokenAsync(false)
+      saveSession({ ...result, profile: useGoogle.getState().profile })
+      useGoogle.setState({ signedIn: true, error: null })
+      return result.accessToken
+    } catch (err) {
+      // Only an authentication failure means the session is dead. A network
+      // blip or a popup timeout must not sign the user out.
+      if (isAuthFailure(err)) {
+        clearSession()
+        useGoogle.setState({ signedIn: false, accessToken: null, expiresAt: null })
+        throw new Error('Your Google session expired. Connect the account again to keep syncing.')
+      }
+      throw err instanceof Error ? err : new Error(String(err))
+    } finally {
+      refreshing = null
+    }
+  })()
+
+  return refreshing
+}
+
+/** Distinguishes "Google says no" from "the network hiccuped". */
+function isAuthFailure(err: unknown): boolean {
+  if (err instanceof GoogleApiError) return err.status === 401 || err.status === 403
+  const message = err instanceof Error ? err.message.toLowerCase() : ''
+  return (
+    message.includes('access_denied') ||
+    message.includes('denied') ||
+    message.includes('not ready') ||
+    message.includes('popup')
+  )
 }
 
 /** Run `job` with a fresh token; a 401 mid-flight buys exactly one silent retry. */
@@ -280,6 +317,10 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
   },
 
   signOut: () => {
+    // Cancel anything in flight first, so a token that lands after this point
+    // is rejected rather than written back into the store.
+    settlePending((p) => p.reject(new Error('Disconnected from Google.')))
+    refreshing = null
     const token = get().accessToken
     if (token) revoke(token)
     clearSession()
@@ -364,10 +405,40 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
         let written = 0
         let removed = 0
 
+        // Rows deleted or regenerated locally (re-planning replaces every
+        // pending auto block) took their event id with them. The store parks
+        // those ids here so the events can still be cleaned up — without this,
+        // every re-plan leaves a full orphaned set behind and the calendar
+        // grows a duplicate layer each sync.
+        const pending = useStore.getState().db.pendingCalendarDeletions
+        if (pending.length > 0) {
+          const settled: typeof pending = []
+          for (const entry of pending) {
+            try {
+              await deleteEvent(token, entry.calendarId, entry.eventId)
+              settled.push(entry)
+              removed += 1
+            } catch {
+              // Already gone, or a transient failure: deleteEvent swallows
+              // 404/410, so anything reaching here is worth retrying next sync.
+            }
+          }
+          if (settled.length > 0) useStore.getState().clearPendingDeletions(settled)
+        }
+
         // Sequential on purpose: a handful of writes is fast enough and Google
         // throttles bursts on a fresh calendar.
         for (const a of useStore.getState().db.assessments) {
-          if (a.status === 'graded') continue
+          if (a.status === 'graded') {
+            // Nothing left to be reminded about — retire the deadline event
+            // rather than leaving it on the calendar saying "To do" forever.
+            if (a.calendarEventId) {
+              await deleteEvent(token, calendarId, a.calendarEventId)
+              useStore.getState().updateAssessment(a.id, { calendarEventId: undefined })
+              removed += 1
+            }
+            continue
+          }
           const dueMs = Date.parse(a.dueAt)
           if (!Number.isFinite(dueMs)) continue
           const course = courses.get(a.courseId)
@@ -437,8 +508,14 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
     try {
       return await authed(async (token) => {
         const calendars = await listCalendars(token)
+        // Skip our own study calendar. The planner treats everything returned
+        // here as busy time, and its own study blocks are not busy — including
+        // them would make each re-plan dodge the slots it just picked.
+        const ownId = useStore.getState().db.settings.studyCalendarId
         const perCalendar = await Promise.all(
-          calendars.map(async (cal) => {
+          calendars
+            .filter((cal) => cal.id !== ownId)
+            .map(async (cal) => {
             try {
               return await listEvents(token, cal.id, fromISO, toISO)
             } catch {

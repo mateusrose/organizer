@@ -473,7 +473,7 @@ export default function Tasks() {
         <TaskEditor
           key={editing.id}
           task={editing}
-          courses={activeCourses}
+          courses={courses}
           assessments={assessments}
           courseById={courseById}
           onClose={() => setEditing(null)}
@@ -898,9 +898,12 @@ function parseQuickTask(raw: string, courses: Course[], now: Date = new Date()):
       if (course) {
         result.courseId = course.id
         result.unknownCourse = undefined
-      } else {
-        result.unknownCourse = word.slice(1)
+        continue
       }
+      // No course by that code: the token is just part of the title
+      // ("email @joao about the lab"), so put it back.
+      result.unknownCourse = word.slice(1)
+      words.push(word)
       continue
     }
 

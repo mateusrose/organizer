@@ -100,21 +100,24 @@ export function Checkbox({
         className,
       )}
     >
+      {/* The real input is visually hidden, so the focus ring has to be drawn
+          on the fake box via `peer-*` — which needs the input to come first. */}
+      <input
+        type="checkbox"
+        className="peer sr-only"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
       <span
         className={cn(
           'flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-[6px] border transition-colors duration-150',
+          'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[var(--ring)]',
           checked ? 'border-accent bg-accent text-accent-contrast' : 'border-line-strong bg-surface-2',
         )}
       >
         {checked && <Check className="h-3 w-3" strokeWidth={3.5} />}
       </span>
-      <input
-        type="checkbox"
-        className="sr-only"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
       {label}
     </label>
   )
@@ -185,6 +188,7 @@ export function SegmentedControl<T extends string>({
 }) {
   return (
     <div
+      role="radiogroup"
       className={cn(
         'inline-flex items-center gap-0.5 rounded-[10px] border border-line bg-surface-2 p-0.5',
         className,
@@ -194,6 +198,8 @@ export function SegmentedControl<T extends string>({
         <button
           key={opt.value}
           type="button"
+          role="radio"
+          aria-checked={value === opt.value}
           onClick={() => onChange(opt.value)}
           className={cn(
             'rounded-lg font-medium transition-colors duration-150',

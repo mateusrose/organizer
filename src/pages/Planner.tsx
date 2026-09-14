@@ -166,9 +166,11 @@ export default function Planner() {
     if (usesCalendar) {
       try {
         const from = new Date()
+        // The scheduler's horizon runs to startOfDay(now) + HORIZON_DAYS + 1;
+        // fetching only to now + HORIZON_DAYS left its tail without busy data.
         const events = await useGoogle
           .getState()
-          .fetchEvents(toISO(from), toISO(addDays(from, HORIZON_DAYS)))
+          .fetchEvents(toISO(from), toISO(addDays(startOfDay(from), HORIZON_DAYS + 1)))
         // All-day entries (birthdays, term markers) would swallow whole days.
         busy = events
           .filter((e) => !e.allDay)
@@ -433,9 +435,9 @@ export default function Planner() {
                 label="Session length (min)"
                 hint="Length of one generated block."
                 value={preferences.sessionMinutes}
-                min={15}
+                min={20}
                 max={300}
-                step={15}
+                step={5}
                 onCommit={(sessionMinutes) => updatePreferences({ sessionMinutes })}
               />
               <NumberPref
@@ -1003,7 +1005,7 @@ function AddBlockModal({
             >
               <option value="">No course</option>
               {courses
-                .filter((c) => !c.archived)
+                .filter((c) => !c.archived || c.id === courseId)
                 .map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}

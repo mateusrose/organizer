@@ -92,7 +92,7 @@ export function Skeleton({ className }: { className?: string }) {
       className={cn('rounded-lg bg-surface-3', className)}
       style={{
         backgroundImage:
-          'linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 0.06) 50%, transparent 100%)',
+          'linear-gradient(90deg, transparent 0%, var(--shimmer) 50%, transparent 100%)',
         backgroundSize: '200% 100%',
         animation: 'shimmer 1.4s linear infinite',
       }}

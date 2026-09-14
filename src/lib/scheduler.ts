@@ -313,7 +313,17 @@ export function planStudyBlocks(input: PlannerInput): PlanResult {
         let length = Math.min(sessionMs, remainingMs, room)
         const tail = remainingMs - length
         // Absorb a stub rather than scheduling it as its own session.
-        if (tail > 0 && tail < MERGE_REMAINDER_MS && length + tail <= room) length += tail
+        if (tail > 0 && tail < MERGE_REMAINDER_MS && length + tail <= room) {
+          length += tail
+        } else if (tail > 0 && tail < MIN_BLOCK_MS) {
+          // A sub-floor tail can never be emitted by a later pass, so it would
+          // be stranded and then reported as a deadline shortfall even with
+          // weeks of free time left. Either leave a placeable remainder behind,
+          // or carry the whole demand to the next slot.
+          const shrunk = remainingMs - MIN_BLOCK_MS
+          if (shrunk >= MIN_BLOCK_MS) length = shrunk
+          else break
+        }
         if (length < MIN_BLOCK_MS) break
 
         const startMs = slot.start
@@ -337,7 +347,8 @@ export function planStudyBlocks(input: PlannerInput): PlanResult {
       }
     }
 
-    if (remainingMs > MINUTE) {
+    // Only a genuinely placeable amount counts as unmet work.
+    if (remainingMs >= MIN_BLOCK_MS) {
       shortfalls.push({ assessmentId: demand.assessment.id, missingHours: remainingMs / HOUR })
     }
   }

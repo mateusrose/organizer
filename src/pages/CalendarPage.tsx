@@ -63,6 +63,12 @@ interface CalItem {
   done?: boolean
   /** Location / calendar name — only surfaced in the day detail modal. */
   detail?: string
+  /**
+   * A moment, not a span: `end` is synthetic (a deadline, or a class with no
+   * stated end time) and exists only to render a time label. Such an item must
+   * never be fanned across days — a 23:59 deadline is not also tomorrow.
+   */
+  point?: boolean
 }
 
 const KIND_META: Record<CalKind, { label: string; icon: LucideIcon; tone: Tone }> = {
@@ -185,6 +191,7 @@ export default function CalendarPage() {
         href: '/assessments',
         done: a.status === 'submitted' || a.status === 'graded',
         detail: `${Math.round(a.weight)}% of final grade`,
+        point: true,
       })
     }
 
@@ -206,6 +213,7 @@ export default function CalendarPage() {
             color: colorOf(c.courseId),
             href: '/courses',
             detail: c.location,
+            point: !c.endTime,
           })
         }
         continue
@@ -226,6 +234,7 @@ export default function CalendarPage() {
         href: '/courses',
         done: c.completed,
         detail: c.location,
+        point: !c.endsAt,
       })
     }
 
@@ -280,11 +289,17 @@ export default function CalendarPage() {
   /** One bucket per calendar day; multi-day items appear on every day they touch. */
   const itemsByDay = useMemo(() => {
     const map = new Map<string, CalItem[]>()
+    const firstDay = startOfDay(rangeStart)
+    const lastDay = startOfDay(rangeEnd)
     for (const item of items) {
-      const last = startOfDay(addMinutes(item.end, -1))
-      let cursor = startOfDay(item.start)
+      // Point items live on exactly one day; spans are clamped to the visible
+      // range so a long item is neither dropped nor iterated pointlessly.
+      const rawLast = item.point ? startOfDay(item.start) : startOfDay(addMinutes(item.end, -1))
+      const last = rawLast > lastDay ? lastDay : rawLast
+      const from = startOfDay(item.start)
+      let cursor = from < firstDay ? firstDay : from
       // Guard: a malformed end date must not spin the loop forever.
-      for (let i = 0; cursor <= last && i < 60; i += 1) {
+      for (let i = 0; cursor <= last && i < 400; i += 1) {
         const key = dayKey(cursor)
         const bucket = map.get(key)
         if (bucket) bucket.push(item)
@@ -294,7 +309,7 @@ export default function CalendarPage() {
     }
     for (const bucket of map.values()) bucket.sort(byStart)
     return map
-  }, [items])
+  }, [items, rangeStart, rangeEnd])
 
   const groups = useMemo(
     () =>

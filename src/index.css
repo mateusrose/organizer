@@ -20,7 +20,7 @@
 
   --text: #f4f4f5;
   --text-muted: #a1a1aa;
-  --text-faint: #6b6b76;
+  --text-faint: #8b8b98;
 
   --accent: #8b5cf6;
   --accent-soft: #a78bfa;
@@ -36,8 +36,9 @@
   --info: #38bdf8;
   --info-bg: rgb(56 189 248 / 0.13);
 
-  --ring: rgb(139 92 246 / 0.55);
+  --ring: rgb(167 139 250 / 0.95);
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.7);
+  --shimmer: rgb(255 255 255 / 0.07);
 }
 
 html.light {
@@ -54,7 +55,7 @@ html.light {
 
   --text: #16161c;
   --text-muted: #5c5c68;
-  --text-faint: #8a8a96;
+  --text-faint: #6c6c78;
 
   --accent: #7c3aed;
   --accent-soft: #6d28d9;
@@ -70,8 +71,9 @@ html.light {
   --info: #0284c7;
   --info-bg: rgb(2 132 199 / 0.1);
 
-  --ring: rgb(124 58 237 / 0.45);
+  --ring: rgb(109 40 217 / 0.9);
   --shadow-card: 0 1px 2px rgb(9 9 20 / 0.05), 0 8px 24px -16px rgb(9 9 20 / 0.2);
+  --shimmer: rgb(9 9 20 / 0.06);
 }
 
 @theme inline {
@@ -118,6 +120,19 @@ html.light {
 [data-course='lime']    { --course: #a3e635; --course-bg: rgb(163 230 53 / 0.15); }
 [data-course='orange']  { --course: #fb923c; --course-bg: rgb(251 146 60 / 0.15); }
 [data-course='indigo']  { --course: #818cf8; --course-bg: rgb(129 140 248 / 0.15); }
+
+/* Light theme needs darker foregrounds: these tokens are used as TEXT colour
+   (course codes, badges, the projected-grade headline), not just as fills. */
+html.light [data-course='violet']  { --course: #6d28d9; --course-bg: rgb(109 40 217 / 0.1); }
+html.light [data-course='sky']     { --course: #0369a1; --course-bg: rgb(3 105 161 / 0.1); }
+html.light [data-course='emerald'] { --course: #047857; --course-bg: rgb(4 120 87 / 0.1); }
+html.light [data-course='amber']   { --course: #b45309; --course-bg: rgb(180 83 9 / 0.1); }
+html.light [data-course='rose']    { --course: #be123c; --course-bg: rgb(190 18 60 / 0.1); }
+html.light [data-course='cyan']    { --course: #0e7490; --course-bg: rgb(14 116 144 / 0.1); }
+html.light [data-course='fuchsia'] { --course: #a21caf; --course-bg: rgb(162 28 175 / 0.1); }
+html.light [data-course='lime']    { --course: #4d7c0f; --course-bg: rgb(77 124 15 / 0.1); }
+html.light [data-course='orange']  { --course: #c2410c; --course-bg: rgb(194 65 12 / 0.1); }
+html.light [data-course='indigo']  { --course: #4338ca; --course-bg: rgb(67 56 202 / 0.1); }
 
 /* --- base ----------------------------------------------------------------- */
 
