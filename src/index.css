@@ -1,0 +1,185 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Semantic tokens. Dark is the default; `html.light` overrides.
+   `@theme inline` maps them to Tailwind utilities that read the live var, so
+   flipping the class re-themes the whole app with no re-render.
+--------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #08080c;
+  --bg-grad-a: #100e1c;
+  --bg-grad-b: #08080c;
+  --surface: #101016;
+  --surface-2: #16161e;
+  --surface-3: #1d1d27;
+  --border: rgb(255 255 255 / 0.07);
+  --border-strong: rgb(255 255 255 / 0.13);
+
+  --text: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --text-faint: #6b6b76;
+
+  --accent: #8b5cf6;
+  --accent-soft: #a78bfa;
+  --accent-bg: rgb(139 92 246 / 0.14);
+  --accent-contrast: #ffffff;
+
+  --success: #34d399;
+  --success-bg: rgb(52 211 153 / 0.13);
+  --warning: #fbbf24;
+  --warning-bg: rgb(251 191 36 / 0.13);
+  --danger: #fb7185;
+  --danger-bg: rgb(251 113 133 / 0.13);
+  --info: #38bdf8;
+  --info-bg: rgb(56 189 248 / 0.13);
+
+  --ring: rgb(139 92 246 / 0.55);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -12px rgb(0 0 0 / 0.7);
+}
+
+html.light {
+  color-scheme: light;
+
+  --bg: #f7f7f9;
+  --bg-grad-a: #f2f0fb;
+  --bg-grad-b: #f7f7f9;
+  --surface: #ffffff;
+  --surface-2: #fbfbfd;
+  --surface-3: #f1f1f5;
+  --border: rgb(9 9 20 / 0.09);
+  --border-strong: rgb(9 9 20 / 0.16);
+
+  --text: #16161c;
+  --text-muted: #5c5c68;
+  --text-faint: #8a8a96;
+
+  --accent: #7c3aed;
+  --accent-soft: #6d28d9;
+  --accent-bg: rgb(124 58 237 / 0.1);
+  --accent-contrast: #ffffff;
+
+  --success: #059669;
+  --success-bg: rgb(5 150 105 / 0.1);
+  --warning: #b45309;
+  --warning-bg: rgb(180 83 9 / 0.1);
+  --danger: #e11d48;
+  --danger-bg: rgb(225 29 72 / 0.1);
+  --info: #0284c7;
+  --info-bg: rgb(2 132 199 / 0.1);
+
+  --ring: rgb(124 58 237 / 0.45);
+  --shadow-card: 0 1px 2px rgb(9 9 20 / 0.05), 0 8px 24px -16px rgb(9 9 20 / 0.2);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+
+  --color-ink: var(--text);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-bg: var(--accent-bg);
+  --color-accent-contrast: var(--accent-contrast);
+
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --radius-card: 14px;
+  --shadow-card: var(--shadow-card);
+}
+
+/* --- course accents ------------------------------------------------------- */
+/* Each course picks one of these; components read var(--course) locally. */
+[data-course='violet']  { --course: #8b5cf6; --course-bg: rgb(139 92 246 / 0.15); }
+[data-course='sky']     { --course: #38bdf8; --course-bg: rgb(56 189 248 / 0.15); }
+[data-course='emerald'] { --course: #34d399; --course-bg: rgb(52 211 153 / 0.15); }
+[data-course='amber']   { --course: #fbbf24; --course-bg: rgb(251 191 36 / 0.15); }
+[data-course='rose']    { --course: #fb7185; --course-bg: rgb(251 113 133 / 0.15); }
+[data-course='cyan']    { --course: #22d3ee; --course-bg: rgb(34 211 238 / 0.15); }
+[data-course='fuchsia'] { --course: #e879f9; --course-bg: rgb(232 121 249 / 0.15); }
+[data-course='lime']    { --course: #a3e635; --course-bg: rgb(163 230 53 / 0.15); }
+[data-course='orange']  { --course: #fb923c; --course-bg: rgb(251 146 60 / 0.15); }
+[data-course='indigo']  { --course: #818cf8; --course-bg: rgb(129 140 248 / 0.15); }
+
+/* --- base ----------------------------------------------------------------- */
+
+* { border-color: var(--border); }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 600px at 12% -10%, var(--bg-grad-a), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, var(--accent-bg), transparent 55%),
+    var(--bg-grad-b);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'ss01';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--accent-bg); color: var(--text); }
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Scrollbars — unobtrusive, theme-aware. */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background-color: var(--text-faint); background-clip: content-box; }
+
+input[type='date'], input[type='time'], input[type='datetime-local'] { color-scheme: inherit; }
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+
+.animate-fade-up { animation: fade-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-pop-in  { animation: pop-in 0.16s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
