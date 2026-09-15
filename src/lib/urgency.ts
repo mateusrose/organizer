@@ -54,11 +54,13 @@ export function assessmentUrgency(a: Assessment, now: Date = new Date()): Urgenc
   }
 
   const days = daysUntil(a.dueAt, now)
-  const weight = Number.isFinite(a.weight) ? Math.max(0, a.weight) : 0
+  // Points are on the course scale (20), where the old weight was a percentage,
+  // so scale them back up to keep stakes and proximity balanced as before.
+  const points = Number.isFinite(a.points) ? Math.max(0, a.points) : 0
   const { level, tone } = bucket(days)
 
   return {
-    score: proximity(days) + weight * 2 + overdueBoost(days),
+    score: proximity(days) + points * 10 + overdueBoost(days),
     level,
     tone,
     label: days === 0 ? 'Due today' : countdownLabel(a.dueAt, now),

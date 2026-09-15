@@ -66,47 +66,50 @@ export function sampleDatabase(now: Date = new Date()): Database {
     title: string,
     kind: Assessment['kind'],
     dueOffset: number,
-    weight: number,
+    points: number,
     estimatedHours: number,
     status: Assessment['status'] = 'todo',
-    grade?: number,
+    score?: number,
   ): Assessment => ({
     id: uid('ass'),
     courseId: course.id,
     title,
     kind,
     dueAt: day(dueOffset, kind === 'exam' ? '14:00' : '23:59'),
-    weight,
+    points,
     estimatedHours,
     status,
-    grade,
+    score,
     createdAt: stamp,
     updatedAt: stamp,
   })
 
+  // Points are slices of each course's 20, scores are percentages of the slice.
+  // Calculus and Programming allocate all 20; the rest leave points unassigned
+  // so the dashboard's third bar segment has something to show.
   db.assessments = [
     // Already graded — gives the projection something to work with.
-    mkAssessment(calculus, 'Continuous assessment 1', 'quiz', -24, 15, 6, 'graded', 13.5),
-    mkAssessment(programming, 'Lab series 1–3', 'lab', -18, 20, 10, 'graded', 17),
-    mkAssessment(linear, 'Problem set 1', 'assignment', -11, 10, 5, 'graded', 11),
-    mkAssessment(architecture, 'Quiz 1', 'quiz', -9, 10, 4, 'graded', 15),
+    mkAssessment(calculus, 'Continuous assessment 1', 'quiz', -24, 4, 6, 'graded', 68),
+    mkAssessment(programming, 'Lab series 1–3', 'lab', -18, 4, 10, 'graded', 85),
+    mkAssessment(linear, 'Problem set 1', 'assignment', -11, 2, 5, 'graded', 55),
+    mkAssessment(architecture, 'Quiz 1', 'quiz', -9, 2, 4, 'graded', 75),
 
     // Overdue — the dashboard should shout about this one.
-    mkAssessment(english, 'Reading report: technical writing', 'reading', -2, 15, 3),
+    mkAssessment(english, 'Reading report: technical writing', 'reading', -2, 3, 3),
 
     // The live pipeline.
-    mkAssessment(linear, 'Problem set 2', 'assignment', 3, 15, 6),
-    mkAssessment(programming, 'Project: inventory CLI', 'project', 9, 30, 22, 'in-progress'),
-    mkAssessment(calculus, 'Continuous assessment 2', 'quiz', 12, 15, 8),
-    mkAssessment(architecture, 'Assembly lab report', 'lab', 16, 20, 9),
-    mkAssessment(english, 'Oral presentation', 'presentation', 21, 25, 6),
+    mkAssessment(linear, 'Problem set 2', 'assignment', 3, 3, 6),
+    mkAssessment(programming, 'Project: inventory CLI', 'project', 9, 6, 22, 'in-progress'),
+    mkAssessment(calculus, 'Continuous assessment 2', 'quiz', 12, 4, 8),
+    mkAssessment(architecture, 'Assembly lab report', 'lab', 16, 4, 9),
+    mkAssessment(english, 'Oral presentation', 'presentation', 21, 5, 6),
 
     // Exams at the end of the semester.
-    mkAssessment(calculus, 'Final exam', 'exam', 38, 55, 30),
-    mkAssessment(programming, 'Final exam', 'exam', 41, 50, 24),
-    mkAssessment(linear, 'Final exam', 'exam', 45, 55, 26),
-    mkAssessment(architecture, 'Final exam', 'exam', 48, 55, 25),
-    mkAssessment(english, 'Written test', 'exam', 33, 45, 10),
+    mkAssessment(calculus, 'Final exam', 'exam', 38, 12, 30),
+    mkAssessment(programming, 'Final exam', 'exam', 41, 10, 24),
+    mkAssessment(linear, 'Final exam', 'exam', 45, 11, 26),
+    mkAssessment(architecture, 'Final exam', 'exam', 48, 11, 25),
+    mkAssessment(english, 'Written test', 'exam', 33, 9, 10),
   ]
 
   const mkWeekly = (

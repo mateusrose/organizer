@@ -45,10 +45,13 @@ and report the conclusion, with the run URL if it failed.
 
 - `src/types/index.ts` — the whole domain model plus `DB_VERSION`. Everything else
   reads its shapes from here.
-- `src/lib/db.ts` — `migrate()` brings any older or partial payload up to the
-  current shape, whether it came from `localStorage` or the sync remote. **Any
-  breaking change to a persisted type needs a `DB_VERSION` bump and a migration
-  step here**, because old copies keep arriving from other devices.
+- `src/lib/db.ts` — `migrate()` brings any partial payload up to the current
+  shape, whether it came from `localStorage` or the sync remote. A breaking change
+  to a persisted type still bumps `DB_VERSION`, but **the app is not in use by
+  anyone else yet, so old formats are dropped rather than converted** — replace the
+  shape and let stale fields fall away. `migrate()` still has to leave every
+  collection present and every field a sane default, since that is what stops a
+  partial or older payload from crashing the app.
 - `src/store/useStore.ts` — the single Zustand store. Mutations go through
   `commit()`, which bumps `revision` and persists.
 - `src/store/useSync.ts` + `src/lib/github/` — sync through a private GitHub repo.

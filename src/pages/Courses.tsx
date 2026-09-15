@@ -318,8 +318,8 @@ function CourseCard({
     [course, assessments, scale],
   )
 
-  const weightSum = assessments.reduce((sum, a) => sum + a.weight, 0)
-  const weightsOff = assessments.length > 0 && Math.abs(weightSum - 100) >= 0.5
+  const pointsSum = assessments.reduce((sum, a) => sum + a.points, 0)
+  const pointsOff = assessments.length > 0 && Math.abs(pointsSum - scale.max) >= 0.5
 
   const upcoming = assessments.filter(
     (a) => a.status !== 'graded' && a.status !== 'submitted' && daysUntil(a.dueAt) >= 0,
@@ -375,19 +375,19 @@ function CourseCard({
             height={6}
             segments={[
               {
-                value: grade.gradedWeight,
+                value: grade.gradedPoints,
                 color: 'var(--course)',
-                label: `${trim(grade.gradedWeight)}% graded`,
+                label: `${trim(grade.gradedPoints)} pts graded`,
               },
               {
-                value: grade.pendingWeight,
+                value: grade.pendingPoints,
                 color: 'color-mix(in srgb, var(--course) 40%, transparent)',
-                label: `${trim(grade.pendingWeight)}% pending`,
+                label: `${trim(grade.pendingPoints)} pts pending`,
               },
               {
-                value: grade.unassignedWeight,
+                value: grade.unassignedPoints,
                 color: 'transparent',
-                label: `${trim(grade.unassignedWeight)}% unassigned`,
+                label: `${trim(grade.unassignedPoints)} pts unassigned`,
               },
             ]}
           />
@@ -395,11 +395,11 @@ function CourseCard({
             <p className="text-[12px] text-muted">
               {assessments.length === 0
                 ? 'No assessments yet'
-                : `${trim(grade.gradedWeight)}% graded · ${trim(grade.pendingWeight)}% pending`}
+                : `${trim(grade.gradedPoints)} graded · ${trim(grade.pendingPoints)} pending · of ${trim(scale.max)}`}
             </p>
-            {weightsOff && (
+            {pointsOff && (
               <Badge tone="warning" icon={<AlertTriangle className="h-3 w-3" />}>
-                weights sum to {trim(weightSum)}%
+                points sum to {trim(pointsSum)}, not {trim(scale.max)}
               </Badge>
             )}
           </div>
@@ -430,8 +430,8 @@ function CourseCard({
             ) : (
               <Badge tone="danger">Below {trim(scale.passing)} pass mark</Badge>
             )}
-            {grade.currentAverage != null && (
-              <Badge>avg so far {fmtGrade(grade.currentAverage)}</Badge>
+            {grade.currentScore != null && (
+              <Badge>scoring {trim(grade.currentScore)}% so far</Badge>
             )}
             {target != null && !grade.targetReachable && (
               <Badge tone="danger" icon={<Target className="h-3 w-3" />}>

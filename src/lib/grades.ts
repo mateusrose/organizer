@@ -3,33 +3,43 @@ import type { Assessment, Course, GradeScale } from '../types'
 /**
  * Grade maths.
  *
- * The model in plain language: every assessment owns a slice of the final
- * grade (its `weight`, a percentage). A graded assessment converts its slice
- * into points on the scale — a 16/20 worth 30% contributes 16 * 0.30 = 4.8
- * points. `earned` is the sum of those contributions, i.e. the grade the
- * student already has in the bag if everything still open scored zero.
+ * The model in plain language: the course is worth `scale.max` points (20 in
+ * Portugal) and every assessment owns a slice of them — a course might split
+ * 4 / 4 / 12. Each assessment is then scored as a percentage of its own slice,
+ * so a 12-point exam scored 75% contributes 12 * 0.75 = 9 points. `earned` is
+ * the sum of those contributions, i.e. the grade the student already has in the
+ * bag if everything still open scored zero.
  *
  * From there we read three futures:
  *   · worst     — nothing else is done: the final grade is exactly `earned`.
- *   · best      — everything left is perfect: `earned` + max * remaining.
- *   · projected — the realistic one: the remaining weight scores the same as
- *                 the average achieved so far. With nothing graded yet there
- *                 is no average to extrapolate from, so it is `null`.
+ *   · best      — everything left scores 100%: `earned` + remaining points.
+ *   · projected — the realistic one: the remaining points score the same
+ *                 percentage as the work done so far. With nothing graded yet
+ *                 there is no average to extrapolate from, so it is `null`.
  *
- * `neededForTarget` inverts the projection: what average must the remaining
- * weight score for the final grade to reach the course target.
+ * `neededForTarget` inverts the projection: what percentage must the remaining
+ * points score for the final grade to reach the course target.
+ *
+ * Two different units meet in here, so the names keep them apart: anything
+ * `…Points` or a grade is on the 0–`scale.max` scale, anything `…Score` is a
+ * percentage 0–100.
  */
 
 export interface CourseGrade {
   courseId: string
-  gradedWeight: number
-  pendingWeight: number
-  unassignedWeight: number
+  /** Points whose assessment is graded, on the 0–scale.max scale. */
+  gradedPoints: number
+  /** Points assigned to assessments that are not graded yet. */
+  pendingPoints: number
+  /** Points of the course no assessment has claimed. */
+  unassignedPoints: number
   earned: number
-  currentAverage: number | null
+  /** Percentage (0–100) scored across the graded points so far. */
+  currentScore: number | null
   projected: number | null
   best: number
   worst: number
+  /** Percentage (0–100) the remaining points must score to hit the target. */
   neededForTarget: number | null
   targetReachable: boolean
   passing: boolean | null
@@ -43,7 +53,7 @@ const clamp = (value: number, lo: number, hi: number): number =>
 const finite = (value: unknown, fallback = 0): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback
 
-/** Grades and weights arrive from user input, so never trust the shape. */
+/** Points and scores arrive from user input, so never trust the shape. */
 const safeScale = (scale: GradeScale): GradeScale => {
   const max = finite(scale?.max, 20)
   return {
@@ -53,7 +63,13 @@ const safeScale = (scale: GradeScale): GradeScale => {
 }
 
 const isGraded = (a: Assessment): boolean =>
-  a.status === 'graded' && typeof a.grade === 'number' && Number.isFinite(a.grade)
+  a.status === 'graded' && typeof a.score === 'number' && Number.isFinite(a.score)
+
+/** The score (0–100) an assessment must reach to clear the course pass mark. */
+export function passingScore(scale: GradeScale): number {
+  const { max, passing } = safeScale(scale)
+  return (passing / max) * 100
+}
 
 export function computeCourseGrade(
   course: Course,
@@ -63,33 +79,35 @@ export function computeCourseGrade(
   const { max, passing } = safeScale(scale)
   const mine = assessments.filter((a) => a.courseId === course.id)
 
-  let gradedWeight = 0
-  let pendingWeight = 0
+  let gradedPoints = 0
+  let pendingPoints = 0
   let earned = 0
 
   for (const a of mine) {
-    const weight = Math.max(0, finite(a.weight))
+    const points = Math.max(0, finite(a.points))
     if (isGraded(a)) {
-      const grade = clamp(finite(a.grade), 0, max)
-      gradedWeight += weight
-      earned += (grade * weight) / 100
+      const score = clamp(finite(a.score), 0, 100)
+      gradedPoints += points
+      earned += (points * score) / 100
     } else {
-      pendingWeight += weight
+      pendingPoints += points
     }
   }
 
-  // A student can mis-enter weights summing past 100; keep the reported totals
-  // honest but never let the projections go through a negative remainder.
-  const gw = clamp(gradedWeight, 0, 100)
-  const remainingWeight = (100 - gw) / 100
-  const unassignedWeight = Math.max(0, 100 - gradedWeight - pendingWeight)
+  // A student can mis-enter points summing past the scale; keep the reported
+  // totals honest but never let the projections go through a negative remainder.
+  const gp = clamp(gradedPoints, 0, max)
+  const remainingPoints = max - gp
+  const unassignedPoints = Math.max(0, max - gradedPoints - pendingPoints)
 
-  // Divide by the REAL graded weight, not the clamped one: with weights that
-  // over-allocate past 100% the clamped value stops being an average at all.
-  const currentAverage = gradedWeight > EPS ? clamp(earned / (gradedWeight / 100), 0, max) : null
+  // Divide by the REAL graded points, not the clamped ones: where the points
+  // over-allocate past the scale the clamped value stops being an average at all.
+  const currentScore = gradedPoints > EPS ? clamp((earned / gradedPoints) * 100, 0, 100) : null
   const projected =
-    currentAverage === null ? null : clamp(earned + currentAverage * remainingWeight, 0, max)
-  const best = clamp(earned + max * remainingWeight, 0, max)
+    currentScore === null
+      ? null
+      : clamp(earned + (currentScore / 100) * remainingPoints, 0, max)
+  const best = clamp(earned + remainingPoints, 0, max)
   const worst = clamp(earned, 0, max)
 
   const target =
@@ -104,22 +122,23 @@ export function computeCourseGrade(
     if (earned >= target - EPS) {
       // Already secured whatever happens next.
       neededForTarget = 0
-    } else if (remainingWeight <= EPS) {
+    } else if (remainingPoints <= EPS) {
       neededForTarget = null
       targetReachable = false
     } else {
-      neededForTarget = (target - earned) / remainingWeight
-      targetReachable = neededForTarget <= max + EPS
+      // A percentage now: how well the points still open have to be scored.
+      neededForTarget = ((target - earned) / remainingPoints) * 100
+      targetReachable = neededForTarget <= 100 + EPS
     }
   }
 
   return {
     courseId: course.id,
-    gradedWeight,
-    pendingWeight,
-    unassignedWeight,
+    gradedPoints,
+    pendingPoints,
+    unassignedPoints,
     earned,
-    currentAverage,
+    currentScore,
     projected,
     best,
     worst,

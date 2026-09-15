@@ -212,7 +212,7 @@ const STATUS_LABEL: Record<Assessment['status'], string> = {
 const assessmentDescription = (a: Assessment, course?: Course): string => {
   const lines = [
     course ? `${course.name} · ${course.code}` : 'Semestre',
-    `${a.kind} · worth ${a.weight}% of the final grade`,
+    `${a.kind} · worth ${a.points} points of the final grade`,
     `Status: ${STATUS_LABEL[a.status]}`,
     `Estimated work: ${a.estimatedHours}h`,
   ]

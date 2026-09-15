@@ -107,13 +107,16 @@ export interface Assessment {
   title: string
   kind: AssessmentKind
   dueAt: ISODate
-  /** Percentage of the final course grade (0–100). */
-  weight: number
+  /**
+   * Share of the final course grade, in points on the course scale — a course
+   * worth 20 might split 4 / 4 / 12. Its assessments should sum to `scale.max`.
+   */
+  points: number
   /** Student estimate of total work, in hours. Drives the study planner. */
   estimatedHours: number
   status: AssessmentStatus
-  /** Achieved grade once status === 'graded'. Uses the configured scale. */
-  grade?: number
+  /** Percentage achieved (0–100) once status === 'graded'. */
+  score?: number
   description?: string
   url?: string
   /** Id of the mirrored event in Google Calendar, when synced. */
@@ -214,9 +217,9 @@ export interface StudyPreferences {
 }
 
 export interface GradeScale {
-  /** Maximum grade, e.g. 20 (PT) or 100. */
+  /** Maximum final grade, e.g. 20 (PT) or 100. Assessment points sum to this. */
   max: number
-  /** Minimum passing grade on the same scale. */
+  /** Minimum passing final grade on the same scale. */
   passing: number
 }
 
@@ -236,7 +239,7 @@ export interface Settings {
 // Persisted database
 // ---------------------------------------------------------------------------
 
-export const DB_VERSION = 3
+export const DB_VERSION = 4
 
 /** A calendar event this app wrote that still needs deleting remotely. */
 export interface PendingEventDeletion {

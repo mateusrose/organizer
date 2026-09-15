@@ -150,7 +150,8 @@ interface Demand {
   assessment: Assessment
   cutoff: number
   remainingMs: number
-  weight: number
+  /** Points of the final grade riding on this, used only to break ties. */
+  points: number
 }
 
 export function planStudyBlocks(input: PlannerInput): PlanResult {
@@ -256,14 +257,14 @@ export function planStudyBlocks(input: PlannerInput): PlanResult {
       cutoff,
       // Honour the 20-minute floor even for a tiny estimate.
       remainingMs: Math.max(remainingHours * HOUR, MIN_BLOCK_MS),
-      weight: Math.max(0, num(assessment.weight, 0, 0, 100)),
+      points: Math.max(0, num(assessment.points, 0, 0, 100)),
     })
   }
 
   demands.sort(
     (a, b) =>
       a.cutoff - b.cutoff ||
-      b.weight - a.weight ||
+      b.points - a.points ||
       (a.assessment.id < b.assessment.id ? -1 : a.assessment.id > b.assessment.id ? 1 : 0),
   )
 

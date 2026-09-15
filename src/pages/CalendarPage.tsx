@@ -200,7 +200,7 @@ export default function CalendarPage() {
         color: colorOf(a.courseId),
         href: '/assessments',
         done: a.status === 'submitted' || a.status === 'graded',
-        detail: `${Math.round(a.weight)}% of final grade`,
+        detail: `${Math.round(a.points)} pts of final grade`,
         point: true,
       })
     }

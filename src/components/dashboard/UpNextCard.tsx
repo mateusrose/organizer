@@ -108,7 +108,7 @@ function UpNextRow({
           <Badge tone="neutral" className="capitalize">
             {assessment.kind}
           </Badge>
-          <Badge tone={course ? 'course' : 'accent'}>{assessment.weight}% of grade</Badge>
+          <Badge tone={course ? 'course' : 'accent'}>{assessment.points} pts of grade</Badge>
           <Badge tone={urgency.tone} className="ml-auto">
             {urgency.label}
           </Badge>

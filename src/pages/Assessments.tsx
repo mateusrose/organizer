@@ -41,7 +41,7 @@ import {
   Select,
   Textarea,
 } from '../components/ui'
-import { computeCourseGrade } from '../lib/grades'
+import { computeCourseGrade, passingScore } from '../lib/grades'
 import { assessmentUrgency, sortByUrgency } from '../lib/urgency'
 import type { Urgency } from '../lib/urgency'
 import { plannedHoursByAssessment } from '../lib/scheduler'
@@ -158,7 +158,7 @@ export default function Assessments() {
     const code = (a: Assessment) => courseMap.get(a.courseId)?.code ?? ''
     if (sort === 'due') return list.sort((a, b) => a.dueAt.localeCompare(b.dueAt))
     if (sort === 'weight') {
-      return list.sort((a, b) => b.weight - a.weight || a.dueAt.localeCompare(b.dueAt))
+      return list.sort((a, b) => b.points - a.points || a.dueAt.localeCompare(b.dueAt))
     }
     return list.sort((a, b) => code(a).localeCompare(code(b)) || a.dueAt.localeCompare(b.dueAt))
   }, [assessments, courseFilter, courseMap, now, query, sort, statusFilter, urgencies])
@@ -400,7 +400,7 @@ function AssessmentRow({
   const meta = [
     `Due ${fmtWeekday(a.dueAt)} ${fmtDayMonth(a.dueAt)}`,
     fmtTime(a.dueAt),
-    `${num(a.weight)}% of grade`,
+    `${num(a.points)} pts of grade`,
     `${num(a.estimatedHours)} h estimated`,
   ]
   if (plannedHours > 0) meta.push(`${num(plannedHours)} h planned`)
@@ -464,12 +464,12 @@ function AssessmentRow({
           className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:justify-end"
         >
           <div className="flex flex-wrap items-center gap-1.5">
-            {a.status === 'graded' && a.grade !== undefined && (
-              <Badge tone={a.grade >= scale.passing ? 'success' : 'danger'}>
-                {num(a.grade)} / {num(scale.max)}
+            {a.status === 'graded' && a.score !== undefined && (
+              <Badge tone={a.score >= passingScore(scale) ? 'success' : 'danger'}>
+                {num(a.score)}%
               </Badge>
             )}
-            {!(a.status === 'graded' && a.grade !== undefined) && (
+            {!(a.status === 'graded' && a.score !== undefined) && (
               <Badge tone={done ? 'neutral' : urgency.tone}>
                 {done ? statusLabel(a.status) : urgency.label}
               </Badge>
@@ -611,10 +611,10 @@ interface FormState {
   title: string
   kind: AssessmentKind
   dueAt: string
-  weight: string
+  points: string
   estimatedHours: string
   status: AssessmentStatus
-  grade: string
+  score: string
   url: string
   description: string
 }
@@ -629,10 +629,10 @@ function initialForm(a: Assessment | null, courses: Course[], forceGraded?: bool
       title: '',
       kind: 'assignment',
       dueAt: toDateTimeInput(due.toISOString()),
-      weight: '',
+      points: '',
       estimatedHours: '4',
       status: 'todo',
-      grade: '',
+      score: '',
       url: '',
       description: '',
     }
@@ -642,10 +642,10 @@ function initialForm(a: Assessment | null, courses: Course[], forceGraded?: bool
     title: a.title,
     kind: a.kind,
     dueAt: toDateTimeInput(a.dueAt),
-    weight: String(a.weight),
+    points: String(a.points),
     estimatedHours: String(a.estimatedHours),
     status: forceGraded ? 'graded' : a.status,
-    grade: a.grade === undefined ? '' : String(a.grade),
+    score: a.score === undefined ? '' : String(a.score),
     url: a.url ?? '',
     description: a.description ?? '',
   }
@@ -681,18 +681,18 @@ function AssessmentModal({
     if (!form.courseId) e.courseId = 'Pick a course'
     if (!form.title.trim()) e.title = 'Give this assessment a title'
     if (!form.dueAt) e.dueAt = 'Set a due date and time'
-    const weight = Number(form.weight)
-    if (form.weight !== '' && (!Number.isFinite(weight) || weight < 0 || weight > 100)) {
-      e.weight = 'Weight must be between 0 and 100'
+    const points = Number(form.points)
+    if (form.points !== '' && (!Number.isFinite(points) || points < 0 || points > scale.max)) {
+      e.points = `Points must be between 0 and ${num(scale.max)}`
     }
     const hours = Number(form.estimatedHours)
     if (form.estimatedHours !== '' && (!Number.isFinite(hours) || hours < 0)) {
       e.estimatedHours = 'Estimated hours cannot be negative'
     }
     if (form.status === 'graded') {
-      const grade = Number(form.grade)
-      if (form.grade === '' || !Number.isFinite(grade) || grade < 0 || grade > scale.max) {
-        e.grade = `Grade must be between 0 and ${num(scale.max)}`
+      const score = Number(form.score)
+      if (form.score === '' || !Number.isFinite(score) || score < 0 || score > 100) {
+        e.score = 'Score must be between 0 and 100'
       }
     }
     return e
@@ -704,16 +704,16 @@ function AssessmentModal({
     if (!form.courseId) return null
     const used = assessments
       .filter((a) => a.courseId === form.courseId && a.id !== assessment?.id)
-      .reduce((sum, a) => sum + (Number.isFinite(a.weight) ? a.weight : 0), 0)
-    return Math.round((100 - used) * 10) / 10
-  }, [assessment, assessments, form.courseId])
+      .reduce((sum, a) => sum + (Number.isFinite(a.points) ? a.points : 0), 0)
+    return Math.round((scale.max - used) * 10) / 10
+  }, [assessment, assessments, form.courseId, scale.max])
 
-  const weightHint =
+  const pointsHint =
     unallocated === null
       ? undefined
       : unallocated >= 0
-        ? `this course has ${num(unallocated)}% unallocated`
-        : `this course is over-allocated by ${num(-unallocated)}%`
+        ? `this course has ${num(unallocated)} of ${num(scale.max)} pts unallocated`
+        : `this course is over-allocated by ${num(-unallocated)} pts`
 
   const save = () => {
     setSubmitted(true)
@@ -727,10 +727,10 @@ function AssessmentModal({
       title: form.title.trim(),
       kind: form.kind,
       dueAt: fromDateTimeInput(form.dueAt),
-      weight: Math.min(100, Math.max(0, Number(form.weight || 0))),
+      points: Math.min(scale.max, Math.max(0, Number(form.points || 0))),
       estimatedHours: Math.max(0, Number(form.estimatedHours || 0)),
       status: form.status,
-      grade: graded ? Number(form.grade) : undefined,
+      score: graded ? Number(form.score) : undefined,
       url: form.url.trim() || undefined,
       description: form.description.trim() || undefined,
       calendarEventId: assessment?.calendarEventId,
@@ -861,21 +861,21 @@ function AssessmentModal({
         </Field>
 
         <Field
-          label="Weight"
-          htmlFor={`${fid}-weight`}
-          hint={weightHint}
-          error={shown.weight}
+          label="Points"
+          htmlFor={`${fid}-points`}
+          hint={pointsHint}
+          error={shown.points}
         >
           <Input
-            id={`${fid}-weight`}
+            id={`${fid}-points`}
             type="number"
             min={0}
-            max={100}
+            max={scale.max}
             step="any"
             inputMode="decimal"
-            value={form.weight}
-            onChange={(e) => set('weight', e.target.value)}
-            placeholder="% of the final grade"
+            value={form.points}
+            onChange={(e) => set('points', e.target.value)}
+            placeholder={`of the course's ${num(scale.max)}`}
           />
         </Field>
 
@@ -898,21 +898,21 @@ function AssessmentModal({
 
         {form.status === 'graded' && (
           <Field
-            label="Grade"
+            label="Score"
             required
-            htmlFor={`${fid}-grade`}
-            hint={`Out of ${num(scale.max)} · passing is ${num(scale.passing)}`}
-            error={shown.grade}
+            htmlFor={`${fid}-score`}
+            hint={`Percentage of this assessment · passing is ${num(passingScore(scale))}%`}
+            error={shown.score}
           >
             <Input
-              id={`${fid}-grade`}
+              id={`${fid}-score`}
               type="number"
               min={0}
-              max={scale.max}
+              max={100}
               step="any"
               inputMode="decimal"
-              value={form.grade}
-              onChange={(e) => set('grade', e.target.value)}
+              value={form.score}
+              onChange={(e) => set('score', e.target.value)}
             />
           </Field>
         )}

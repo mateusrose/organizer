@@ -100,27 +100,27 @@ export function CourseProgressCard({
                   height={7}
                   segments={[
                     {
-                      value: grade.gradedWeight,
+                      value: grade.gradedPoints,
                       color: 'var(--success)',
-                      label: `${Math.round(grade.gradedWeight)}% graded`,
+                      label: `${Math.round(grade.gradedPoints)} pts graded`,
                     },
                     {
-                      value: grade.pendingWeight,
+                      value: grade.pendingPoints,
                       color: 'var(--warning)',
-                      label: `${Math.round(grade.pendingWeight)}% pending`,
+                      label: `${Math.round(grade.pendingPoints)} pts pending`,
                     },
                     {
-                      value: grade.unassignedWeight,
+                      value: grade.unassignedPoints,
                       color: 'var(--surface-3)',
-                      label: `${Math.round(grade.unassignedWeight)}% unassigned`,
+                      label: `${Math.round(grade.unassignedPoints)} pts unassigned`,
                     },
                   ]}
                 />
 
                 <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px]">
                   <span className="text-faint">
-                    {Math.round(grade.gradedWeight)}% graded · {Math.round(grade.pendingWeight)}%
-                    pending
+                    {Math.round(grade.gradedPoints)} graded ·{' '}
+                    {Math.round(grade.pendingPoints)} pending · of {scale.max}
                   </span>
                   <TargetNote course={course} grade={grade} scale={scale} />
                 </div>
