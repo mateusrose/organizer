@@ -111,6 +111,8 @@ export interface Theme {
   endsOn: ISODate
   status: ThemeStatus
   description?: string
+  /** The unit's own page — a Moodle section or course chapter. */
+  url?: string
   /**
    * The assessment this unit feeds, chosen by the student. The theme owns the
    * date range the work happens in; the assessment keeps only its own deadline.

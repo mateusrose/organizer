@@ -200,6 +200,7 @@ export function sampleDatabase(now: Date = new Date()): Database {
   if (pointers) {
     pointers.description =
       'Addresses, dynamic allocation and the ownership rules the project leans on.'
+    pointers.url = 'https://example.edu/prg102/pointers'
     pointers.assessmentId = db.assessments.find(
       (a) => a.courseId === programming.id && a.kind === 'project',
     )?.id

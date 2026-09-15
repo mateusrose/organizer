@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { BookOpen, GraduationCap, Plus, Trash2 } from 'lucide-react'
+import { BookOpen, ExternalLink, GraduationCap, Plus, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { RESOURCE_KINDS, RESOURCE_KIND_LABEL } from '../types'
 import type {
@@ -485,6 +485,7 @@ function ThemeEditor({
   const [endsOn, setEndsOn] = useState(theme?.endsOn ?? new Date().toISOString())
   const [status, setStatus] = useState<Theme['status']>(theme?.status ?? 'not-started')
   const [description, setDescription] = useState(theme?.description ?? '')
+  const [url, setUrl] = useState(theme?.url ?? '')
   const [assessmentId, setAssessmentId] = useState(theme?.assessmentId ?? '')
   const [todos, setTodos] = useState<ThemeTodo[]>(theme?.todos ?? [])
   const [resources, setResources] = useState<LearningResource[]>(theme?.resources ?? [])
@@ -537,6 +538,7 @@ function ThemeEditor({
       endsOn: endsOn < startsOn ? startsOn : endsOn,
       status,
       description: description.trim() || undefined,
+      url: url.trim() || undefined,
       assessmentId: assessmentId || undefined,
       todos: todos.map((t) => ({ ...t, text: t.text.trim() })).filter((t) => t.text),
       resources: resources
@@ -674,6 +676,28 @@ function ThemeEditor({
                 </option>
               ))}
             </Select>
+          </Field>
+
+          <Field label="Link" htmlFor="theme-url" hint="Moodle section, course chapter, slides">
+            <div className="flex items-center gap-2">
+              <Input
+                id="theme-url"
+                type="url"
+                value={url}
+                placeholder="https://"
+                className="min-w-0 flex-1"
+                onChange={(e) => setUrl(e.target.value)}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Open link"
+                title="Open in a new tab"
+                disabled={!url.trim()}
+                icon={<ExternalLink className="h-4 w-4" />}
+                onClick={() => window.open(url.trim(), '_blank', 'noopener,noreferrer')}
+              />
+            </div>
           </Field>
 
           <Field label="Notes" htmlFor="theme-notes">
