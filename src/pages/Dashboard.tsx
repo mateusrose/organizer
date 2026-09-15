@@ -14,15 +14,54 @@ import { WeekStrip } from '../components/dashboard/WeekStrip'
 import { CourseProgressCard } from '../components/dashboard/CourseProgressCard'
 import { TodayTasksCard } from '../components/dashboard/TodayTasksCard'
 import { greetingLabel, primaryLink } from '../components/dashboard/shared'
+import { CurrentThemesCard } from '../components/dashboard/CurrentThemesCard'
+import { FilterBar } from '../components/FilterBar'
+import { useFilters, type FilterKind } from '../store/useFilters'
 
 export default function Dashboard() {
   const now = useMemo(() => new Date(), [])
-  const { courses, assessments, classes, studyBlocks, tasks } = useScope()
+  const { courses, assessments, classes, studyBlocks, tasks, themes, semester } = useScope()
   const preferences = usePreferences()
   const settings = useSettings()
 
   const activeCourses = useMemo(() => courses.filter((c) => !c.archived), [courses])
   const courseById = useMemo(() => new Map(courses.map((c) => [c.id, c] as const)), [courses])
+
+  // Subscribe to the raw filter fields, not the predicates — calling
+  // useFilters.getState() in render would not re-render when they change.
+  const courseIds = useFilters((s) => s.courseIds)
+  const hiddenKinds = useFilters((s) => s.hiddenKinds)
+  const filtering = courseIds !== null || hiddenKinds.length > 0
+  const showCourse = (id?: string) => courseIds === null || !id || courseIds.includes(id)
+  const showKind = (kind: FilterKind) => !hiddenKinds.includes(kind)
+
+  // The stat row and course progress stay unfiltered — they are the semester
+  // overview. Everything below them respects the filter bar.
+  const shownAssessments = useMemo(
+    () => (showKind('assessments') ? assessments.filter((a) => showCourse(a.courseId)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [assessments, courseIds, hiddenKinds],
+  )
+  const shownThemes = useMemo(
+    () => (showKind('themes') ? themes.filter((t) => showCourse(t.courseId)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [themes, courseIds, hiddenKinds],
+  )
+  const shownStudyBlocks = useMemo(
+    () => (showKind('study') ? studyBlocks.filter((b) => showCourse(b.courseId)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [studyBlocks, courseIds, hiddenKinds],
+  )
+  const shownTasks = useMemo(
+    () => (showKind('tasks') ? tasks.filter((t) => showCourse(t.courseId)) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tasks, courseIds, hiddenKinds],
+  )
+  const shownCourses = useMemo(
+    () => activeCourses.filter((c) => showCourse(c.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeCourses, courseIds],
+  )
 
   const deadlines = useMemo(() => {
     const until = addDays(now, 7)
@@ -92,9 +131,21 @@ export default function Dashboard() {
 
   return (
     <>
-      <GreetingStrip now={now} deadlines={deadlines.dueThisWeek} plannedHours={plannedHours} />
+      <GreetingStrip
+        now={now}
+        deadlines={deadlines.dueThisWeek}
+        plannedHours={plannedHours}
+        semester={semester}
+      />
 
       <div className="flex flex-col gap-4 sm:gap-5">
+        {activeCourses.length > 1 && (
+          <FilterBar
+            courses={activeCourses}
+            kinds={['assessments', 'themes', 'study', 'tasks']}
+          />
+        )}
+
         <StatRow
           dueThisWeek={deadlines.dueThisWeek}
           overdue={deadlines.overdue}
@@ -105,17 +156,19 @@ export default function Dashboard() {
           scale={settings.gradeScale}
         />
 
+        <CurrentThemesCard courses={shownCourses} themes={shownThemes} now={now} />
+
         <UpNextCard
-          assessments={assessments}
+          assessments={shownAssessments}
           courseById={courseById}
           plannedByAssessment={plannedByAssessment}
           now={now}
         />
 
         <WeekStrip
-          assessments={assessments}
-          classes={classes}
-          studyBlocks={studyBlocks}
+          assessments={shownAssessments}
+          classes={showKind('classes') ? classes.filter((c) => showCourse(c.courseId)) : []}
+          studyBlocks={shownStudyBlocks}
           courseById={courseById}
           now={now}
         />
@@ -125,8 +178,9 @@ export default function Dashboard() {
             courses={activeCourses}
             assessments={assessments}
             scale={settings.gradeScale}
+            allCoursesNote={filtering}
           />
-          <TodayTasksCard tasks={tasks} courseById={courseById} now={now} />
+          <TodayTasksCard tasks={shownTasks} courseById={courseById} now={now} />
         </div>
       </div>
     </>

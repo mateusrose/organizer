@@ -15,15 +15,19 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { addMinutes, addMonths, isSameMonth, startOfMonth } from 'date-fns'
-import type { CalendarEvent, CourseColor } from '../types'
+import type { CalendarEvent, CourseColor, Theme } from '../types'
 import { useSettings } from '../store/useStore'
 import { useScope } from '../store/scope'
 import { useGoogle } from '../store/useGoogle'
+import { THEME_STATUS_LABEL, currentThemes, isBehind } from '../lib/themes'
+import { FilterBar } from '../components/FilterBar'
+import { useFilters, type FilterKind } from '../store/useFilters'
 import {
   addDays,
   atTime,
   daySpan,
   endOfDay,
+  fmtDayMonth,
   format,
   isSameDay,
   startOfDay,
@@ -48,7 +52,7 @@ import {
 import type { Tone } from '../components/ui'
 
 type ViewMode = 'month' | 'week' | 'agenda'
-type CalKind = 'assessment' | 'class' | 'study' | 'external'
+type CalKind = 'assessment' | 'theme' | 'class' | 'study' | 'external'
 
 interface CalItem {
   id: string
@@ -73,6 +77,7 @@ interface CalItem {
 
 const KIND_META: Record<CalKind, { label: string; icon: LucideIcon; tone: Tone }> = {
   assessment: { label: 'Deadline', icon: Flag, tone: 'danger' },
+  theme: { label: 'Theme', icon: BookOpen, tone: 'course' },
   class: { label: 'Class', icon: BookOpen, tone: 'info' },
   study: { label: 'Study', icon: Timer, tone: 'accent' },
   external: { label: 'Google', icon: CalendarDays, tone: 'neutral' },
@@ -91,7 +96,7 @@ const byStart = (a: CalItem, b: CalItem) =>
   a.title.localeCompare(b.title)
 
 export default function CalendarPage() {
-  const { courses, assessments, classes, studyBlocks } = useScope()
+  const { courses, assessments, classes, studyBlocks, themes } = useScope()
   const settings = useSettings()
   const navigate = useNavigate()
 
@@ -160,6 +165,11 @@ export default function CalendarPage() {
   const externalEvents = useMemo(() => (signedIn ? external : []), [signedIn, external])
 
   const courseById = useMemo(() => new Map(courses.map((c) => [c.id, c] as const)), [courses])
+
+  // Subscribe to the raw fields so the page re-renders when a filter changes.
+  const courseIds = useFilters((s) => s.courseIds)
+  const hiddenKinds = useFilters((s) => s.hiddenKinds)
+  const activeCourses = useMemo(() => courses.filter((c) => !c.archived), [courses])
   const codeOf = (courseId?: string) => (courseId ? courseById.get(courseId)?.code : undefined)
 
   /** Events this app itself pushed to Google — skip them or they show up twice. */
@@ -170,7 +180,7 @@ export default function CalendarPage() {
     return ids
   }, [assessments, studyBlocks])
 
-  const items = useMemo<CalItem[]>(() => {
+  const allItems = useMemo<CalItem[]>(() => {
     const list: CalItem[] = []
     const within = (s: Date, e: Date) => s <= rangeEnd && e >= rangeStart
     const colorOf = (courseId?: string) =>
@@ -256,6 +266,26 @@ export default function CalendarPage() {
       })
     }
 
+    for (const t of themes) {
+      // A theme occupies whole days, end day included — not a point in time.
+      const start = startOfDay(toDate(t.startsOn))
+      const end = endOfDay(toDate(t.endsOn))
+      if (!within(start, end)) continue
+      list.push({
+        id: `th-${t.id}`,
+        kind: 'theme',
+        title: t.title,
+        start,
+        end,
+        allDay: true,
+        courseId: t.courseId,
+        color: colorOf(t.courseId),
+        href: '/courses',
+        done: t.status === 'done',
+        detail: isBehind(t) ? 'Behind schedule' : THEME_STATUS_LABEL[t.status],
+      })
+    }
+
     for (const e of externalEvents) {
       if (mirroredIds.has(e.id)) continue
       const start = toDate(e.start)
@@ -278,6 +308,7 @@ export default function CalendarPage() {
     assessments,
     classes,
     studyBlocks,
+    themes,
     externalEvents,
     mirroredIds,
     courseById,
@@ -285,6 +316,37 @@ export default function CalendarPage() {
     rangeStart,
     rangeEnd,
   ])
+
+  /**
+   * Google events carry no course, so a course filter must never hide them —
+   * only their own kind toggle does.
+   */
+  const items = useMemo(() => {
+    const kindOf: Record<CalKind, FilterKind> = {
+      assessment: 'assessments',
+      theme: 'themes',
+      class: 'classes',
+      study: 'study',
+      external: 'external',
+    }
+    return allItems.filter((item) => {
+      if (hiddenKinds.includes(kindOf[item.kind])) return false
+      if (courseIds === null) return true
+      if (item.kind === 'external' || !item.courseId) return true
+      return courseIds.includes(item.courseId)
+    })
+  }, [allItems, courseIds, hiddenKinds])
+
+  const filtering = courseIds !== null || hiddenKinds.length > 0
+
+  /** Theme bands covering today, respecting the course filter. */
+  const liveThemes = useMemo(
+    () =>
+      currentThemes(themes).filter(
+        (t) => courseIds === null || courseIds.includes(t.courseId),
+      ),
+    [themes, courseIds],
+  )
 
   /** One bucket per calendar day; multi-day items appear on every day they touch. */
   const itemsByDay = useMemo(() => {
@@ -307,7 +369,15 @@ export default function CalendarPage() {
         cursor = addDays(cursor, 1)
       }
     }
-    for (const bucket of map.values()) bucket.sort(byStart)
+    // Bands first, so a theme occupies the same row in every day it covers and
+    // therefore reads as one continuous strip across the week.
+    for (const bucket of map.values()) {
+      bucket.sort((a, b) => {
+        if ((a.kind === 'theme') !== (b.kind === 'theme')) return a.kind === 'theme' ? -1 : 1
+        if (a.kind === 'theme' && b.kind === 'theme') return a.id.localeCompare(b.id)
+        return byStart(a, b)
+      })
+    }
     return map
   }, [items, rangeStart, rangeEnd])
 
@@ -384,6 +454,14 @@ export default function CalendarPage() {
         }
       />
 
+      {activeCourses.length > 1 && <FilterBar courses={activeCourses} className="mb-4" />}
+
+      {filtering && (
+        <p className="mb-3 text-[12px] text-faint">
+          Showing {items.length} of {allItems.length} items
+        </p>
+      )}
+
       <SyncLine
         signedIn={signedIn}
         loading={loadingExternal}
@@ -419,12 +497,12 @@ export default function CalendarPage() {
             {items.length === 0 && <RangeEmpty className="mt-4" />}
           </div>
           <div className="sm:hidden">
-            <AgendaList groups={groups} today={today} codeOf={codeOf} />
+            <AgendaList groups={groups} today={today} codeOf={codeOf} live={liveThemes} />
           </div>
         </>
       )}
 
-      {view === 'agenda' && <AgendaList groups={groups} today={today} codeOf={codeOf} />}
+      {view === 'agenda' && <AgendaList groups={groups} today={today} codeOf={codeOf} live={liveThemes} />}
 
       <Modal
         open={detailDay !== null}
@@ -631,7 +709,7 @@ function MonthGrid({
 
                 <span className="hidden min-w-0 flex-col gap-0.5 sm:flex">
                   {list.slice(0, 3).map((item) => (
-                    <Chip key={item.id} item={item} />
+                    <Chip key={item.id} item={item} day={day} firstOfRow={i % 7 === 0} />
                   ))}
                   {list.length > 3 && (
                     <span className="pl-1 text-[11px] text-faint">+{list.length - 3} more</span>
@@ -670,15 +748,38 @@ function MonthGrid({
 }
 
 /** Compact colour-coded event chip used in month cells and the all-day strip. */
-function Chip({ item }: { item: CalItem }) {
+function Chip({
+  item,
+  day,
+  firstOfRow = false,
+}: {
+  item: CalItem
+  day?: Date
+  firstOfRow?: boolean
+}) {
   const external = item.kind === 'external'
   const study = item.kind === 'study'
+  const theme = item.kind === 'theme'
+
+  // A theme spans days, so it is drawn as one continuous band: rounded and
+  // labelled only where the run actually begins (or where a week row does).
+  const bandStart = !theme || !day || firstOfRow || isSameDay(day, item.start)
+  const bandEnd = !theme || !day || isSameDay(day, item.end)
+
   return (
     <span
       data-course={item.color}
+      title={theme ? item.title : undefined}
       className={cn(
-        'flex min-w-0 items-center gap-1 overflow-hidden rounded-[5px] border-l-2 py-0.5 pr-1 pl-1.5',
+        'flex min-w-0 items-center gap-1 overflow-hidden border-l-2 py-0.5 pr-1 pl-1.5',
         'text-[11px] leading-4',
+        theme
+          ? cn(
+              'h-[15px] pl-1',
+              bandStart ? 'rounded-l-[5px]' : 'border-l-0 pl-1',
+              bandEnd && 'rounded-r-[5px]',
+            )
+          : 'rounded-[5px]',
         external && 'border-line-strong bg-surface-2 text-muted',
         item.done && 'line-through opacity-55',
       )}
@@ -698,10 +799,11 @@ function Chip({ item }: { item: CalItem }) {
       {!item.allDay && (
         <span className="shrink-0 tabular-nums opacity-70">{format(item.start, 'HH:mm')}</span>
       )}
-      <span className="min-w-0 truncate">{item.title}</span>
+      <span className="min-w-0 truncate">{bandStart ? item.title : '\u00a0'}</span>
     </span>
   )
 }
+
 
 // ---------------------------------------------------------------------------
 // Week
@@ -971,16 +1073,46 @@ function AgendaList({
   groups,
   today,
   codeOf,
+  live,
 }: {
   groups: { day: Date; list: CalItem[] }[]
   today: Date
   codeOf: (courseId?: string) => string | undefined
+  /** Theme bands covering today — pinned above the list. */
+  live: Theme[]
 }) {
   const navigate = useNavigate()
 
+  const pinned = live.length > 0 && (
+    <Card className="mb-4">
+      <p className="mb-2.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-faint uppercase">
+        <BookOpen className="h-3.5 w-3.5" />
+        Currently studying
+      </p>
+      <ul className="flex flex-col gap-2">
+        {live.map((theme) => (
+          <li key={theme.id} className="flex items-center justify-between gap-3">
+            <span className="flex min-w-0 items-center gap-2">
+              <CourseDot />
+              <span className="shrink-0 text-[12px] font-medium text-muted">
+                {codeOf(theme.courseId)}
+              </span>
+              <span className="truncate text-[13px] text-ink">{theme.title}</span>
+            </span>
+            <Badge tone={isBehind(theme) ? 'danger' : 'neutral'}>
+              {isBehind(theme) ? 'behind' : `until ${fmtDayMonth(theme.endsOn)}`}
+            </Badge>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+
   if (groups.length === 0) {
     return (
-      <EmptyState
+      <>
+        {pinned}
+        <EmptyState
         icon={<CalendarX />}
         title="Nothing coming up"
         message="No deadlines, classes or study blocks in this window. Add an assessment or generate a study plan to fill it."
@@ -993,12 +1125,15 @@ function AgendaList({
             Open the study planner
           </Button>
         }
-      />
+        />
+      </>
     )
   }
 
   return (
-    <Card padded={false} className="overflow-hidden">
+    <>
+      {pinned}
+      <Card padded={false} className="overflow-hidden">
       {groups.map(({ day, list }, i) => (
         <section key={dayKey(day)} className={cn(i > 0 && 'border-t border-line')}>
           <header className="flex items-baseline gap-2 bg-surface-2 px-3 py-2">
@@ -1019,7 +1154,8 @@ function AgendaList({
           </div>
         </section>
       ))}
-    </Card>
+      </Card>
+    </>
   )
 }
 

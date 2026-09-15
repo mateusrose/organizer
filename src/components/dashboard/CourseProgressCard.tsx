@@ -12,10 +12,13 @@ export function CourseProgressCard({
   courses,
   assessments,
   scale,
+  allCoursesNote = false,
 }: {
   courses: Course[]
   assessments: Assessment[]
   scale: GradeScale
+  /** True when a filter is active elsewhere, so the unfiltered totals are explained. */
+  allCoursesNote?: boolean
 }) {
   const rows = useMemo(
     () =>
@@ -34,7 +37,11 @@ export function CourseProgressCard({
     <Card>
       <CardHeader
         title="Course progress"
-        subtitle="Where every grade currently stands"
+        subtitle={
+          allCoursesNote
+            ? 'Where every grade currently stands (all courses, ignoring filters)'
+            : 'Where every grade currently stands'
+        }
         icon={<GraduationCap />}
         action={
           rows.length > 0 && (
