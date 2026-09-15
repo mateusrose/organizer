@@ -29,7 +29,6 @@ export const defaultPreferences = (): StudyPreferences => ({
 
 export const defaultSettings = (): Settings => ({
   theme: 'dark',
-  requireSignIn: false,
   weekStartsOn: 1,
   gradeScale: { max: 20, passing: 9.5 },
   calendarSyncEnabled: false,

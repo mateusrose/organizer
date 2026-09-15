@@ -1,4 +1,4 @@
-import type { Database } from '../../types'
+import type { Database, DatabaseSummary } from '../../types'
 import { migrate } from '../db'
 import { uid } from '../id'
 import { GoogleApiError, gapiFetch } from './auth'
@@ -132,4 +132,52 @@ export function mergeDatabases(
     return { winner: remote, reason: 'Same revision — kept the newer Drive copy.' }
   }
   return { winner: local, reason: 'Already in sync.' }
+}
+
+// ---------------------------------------------------------------------------
+// First-sync safety
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-device marker, deliberately NOT part of the synced database: it records
+ * whether *this browser* has ever reconciled with Drive. Until it has, an
+ * automatic merge could overwrite a copy the user never agreed to replace.
+ */
+const SYNC_MARK = 'semestre.drive.lastSync'
+
+export function hasSyncedBefore(): boolean {
+  try {
+    return Boolean(localStorage.getItem(SYNC_MARK))
+  } catch {
+    return false
+  }
+}
+
+export function markSynced(): void {
+  try {
+    localStorage.setItem(SYNC_MARK, new Date().toISOString())
+  } catch {
+    // Not worth failing a sync over.
+  }
+}
+
+export function summarise(db: Database): DatabaseSummary {
+  return {
+    courses: db.courses.length,
+    assessments: db.assessments.length,
+    themes: db.themes.length,
+    tasks: db.tasks.length,
+    updatedAt: db.updatedAt,
+    revision: db.revision,
+  }
+}
+
+/** True when a database holds anything worth losing. */
+export function hasContent(db: Database): boolean {
+  return (
+    db.courses.length > 0 ||
+    db.assessments.length > 0 ||
+    db.themes.length > 0 ||
+    db.tasks.length > 0
+  )
 }

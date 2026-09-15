@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Shell } from './components/layout/Shell'
-import { SignInGate } from './components/SignInGate'
 import Dashboard from './pages/Dashboard'
 import Courses from './pages/Courses'
 import Syllabus from './pages/Syllabus'
@@ -36,13 +35,7 @@ export default function App() {
   return (
     <HashRouter>
       <Routes>
-        <Route
-          element={
-            <SignInGate>
-              <Shell />
-            </SignInGate>
-          }
-        >
+        <Route element={<Shell />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/courses" element={<Courses />} />
           <Route path="/syllabus" element={<Syllabus />} />

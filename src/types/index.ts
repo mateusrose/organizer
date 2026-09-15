@@ -207,15 +207,6 @@ export interface GradeScale {
 
 export interface Settings {
   theme: 'dark' | 'light'
-  /**
-   * Require a Google sign-in as `ownerEmail` before the app renders anything.
-   * This is a front-door lock, not access control: the data lives in the
-   * visitor's own browser, so a stranger opening the site sees an empty app
-   * regardless. It exists to keep the deployed page tied to one account.
-   */
-  requireSignIn: boolean
-  /** The only Google account allowed in. Adopted on first sign-in. */
-  ownerEmail?: string
   weekStartsOn: 0 | 1
   gradeScale: GradeScale
   /** Google OAuth client id, entered by the user at runtime. */
@@ -285,6 +276,26 @@ export interface CalendarEvent {
   allDay: boolean
   htmlLink?: string
   colorId?: string
+}
+
+/** Enough of a database to tell two copies apart in a chooser. */
+export interface DatabaseSummary {
+  courses: number
+  assessments: number
+  themes: number
+  tasks: number
+  updatedAt: ISODate
+  revision: number
+}
+
+/**
+ * Raised the first time a device reconciles with Drive and BOTH sides already
+ * hold real data. Revision is a per-device edit counter, not a clock, so
+ * picking a winner automatically can silently destroy the other copy.
+ */
+export interface DriveConflict {
+  local: DatabaseSummary
+  remote: DatabaseSummary
 }
 
 export type SyncState =
