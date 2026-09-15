@@ -27,6 +27,15 @@ export const toDateTimeInput = (iso: ISODate): string =>
 export const fromDateTimeInput = (value: string): ISODate =>
   new Date(value.length <= 10 ? `${value}T12:00` : value).toISOString()
 
+/**
+ * Parse a `date` input value as local midnight — for a day that marks the start
+ * of something, where noon would read as an arbitrary hour in the UI.
+ */
+export const fromDateInput = (value: string): ISODate => {
+  const [y, m, d] = value.split('-').map(Number)
+  return new Date(y, m - 1, d, 0, 0, 0, 0).toISOString()
+}
+
 export const fmtDate = (iso: ISODate): string => format(parseISO(iso), 'd MMM yyyy')
 export const fmtDayMonth = (iso: ISODate): string => format(parseISO(iso), 'd MMM')
 export const fmtTime = (iso: ISODate): string => format(parseISO(iso), 'HH:mm')

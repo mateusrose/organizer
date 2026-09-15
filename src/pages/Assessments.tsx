@@ -63,6 +63,8 @@ import {
   fmtWeekday,
   fromDateTimeInput,
   toDate,
+  fromDateInput,
+  toDateInput,
   toDateTimeInput,
 } from '../lib/date'
 
@@ -668,7 +670,7 @@ function initialForm(a: Assessment | null, courses: Course[], forceGraded?: bool
     title: a.title,
     kind: a.kind,
     mode: a.mode,
-    startsAt: a.startsAt ? toDateTimeInput(a.startsAt) : '',
+    startsAt: a.startsAt ? toDateInput(a.startsAt) : '',
     dueAt: toDateTimeInput(a.dueAt),
     points: String(a.points),
     estimatedHours: String(a.estimatedHours),
@@ -714,7 +716,7 @@ function AssessmentModal({
     if (!form.courseId) e.courseId = 'Pick a course'
     if (!form.title.trim()) e.title = 'Give this assessment a title'
     if (!form.dueAt) e.dueAt = 'Set a due date and time'
-    if (form.startsAt && form.dueAt && form.startsAt > form.dueAt)
+    if (form.startsAt && form.dueAt && form.startsAt > form.dueAt.slice(0, 10))
       e.startsAt = 'The work cannot start after it is due'
     const points = Number(form.points)
     if (form.points !== '' && (!Number.isFinite(points) || points < 0 || points > scale.max)) {
@@ -764,7 +766,7 @@ function AssessmentModal({
       mode: form.mode,
       startsAt:
         hasDateRange(form.kind) && form.startsAt
-          ? fromDateTimeInput(form.startsAt)
+          ? fromDateInput(form.startsAt)
           : undefined,
       dueAt: fromDateTimeInput(form.dueAt),
       points: Math.min(scale.max, Math.max(0, Number(form.points || 0))),
@@ -897,7 +899,7 @@ function AssessmentModal({
           >
             <Input
               id={`${fid}-starts`}
-              type="datetime-local"
+              type="date"
               value={form.startsAt}
               onChange={(e) => set('startsAt', e.target.value)}
             />
