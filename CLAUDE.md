@@ -21,17 +21,25 @@ Every push to `main` triggers `.github/workflows/deploy.yml`, which builds and
 publishes to GitHub Pages. **Always check that the run succeeded before calling a
 push done** — a green push with a red deploy means the live site is still stale.
 
-`gh` is not installed here. The repo is public, so the API answers unauthenticated:
+`gh` is not installed here. The repo is public, so the API answers unauthenticated.
+Match on the pushed commit rather than reading the newest run — for the first few
+seconds after a push the newest run is still the *previous* one, which already says
+`completed`:
 
 ```bash
-curl -s "https://api.github.com/repos/mateusrose/organizer/actions/runs?per_page=1" \
-  | grep -E '"(head_sha|status|conclusion|html_url)"' | head -4
+TARGET=$(git rev-parse HEAD)
+curl -s "https://api.github.com/repos/mateusrose/organizer/actions/runs?per_page=5" \
+  | python3 -c "
+import json,sys
+runs = json.load(sys.stdin)['workflow_runs']
+hit = next((r for r in runs if r['head_sha'] == '$TARGET'), None)
+print(hit and (hit['status'], hit['conclusion'], hit['html_url']) or 'no run yet')
+"
 ```
 
-Confirm `head_sha` matches the commit just pushed. A run goes
-`queued` → `in_progress` → `completed`; only `"conclusion": "success"` counts as
-published. Wait and re-check while it is still running, and report the conclusion,
-including the run URL if it failed.
+A run goes `queued` → `in_progress` → `completed`, and takes roughly a minute; only
+`conclusion == 'success'` counts as published. Poll every ~20s while it is running,
+and report the conclusion, with the run URL if it failed.
 
 ## Architecture
 
