@@ -3,6 +3,7 @@ import { cn } from '../../lib/cn'
 import { NAV } from './nav'
 import { TopBar } from './TopBar'
 import { Toaster } from '../ui/Toaster'
+import { SemesterSwitcher } from '../SemesterSwitcher'
 
 export function Shell() {
   const { pathname } = useLocation()
@@ -18,6 +19,8 @@ export function Shell() {
             <div className="text-[11px] text-faint">study command centre</div>
           </div>
         </div>
+
+        <SemesterSwitcher />
 
         <nav className="flex flex-1 flex-col gap-0.5 px-3 py-2">
           {NAV.map((item) => (

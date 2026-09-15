@@ -1,33 +1,39 @@
-import { useLocation } from 'react-router-dom'
-import { CloudOff, Moon, RefreshCw, Sun } from 'lucide-react'
+import { CloudOff, Moon, RefreshCw, Sun, TriangleAlert } from 'lucide-react'
 import { format } from 'date-fns'
 import { Button } from '../ui/Button'
 import { cn } from '../../lib/cn'
-import { NAV } from './nav'
-import { useSettings, useStore } from '../../store/useStore'
+import { useSettings, useStorageError, useStore } from '../../store/useStore'
 import { useGoogle } from '../../store/useGoogle'
+import { SemesterSwitcher } from '../SemesterSwitcher'
 
 export function TopBar() {
-  const { pathname } = useLocation()
   const settings = useSettings()
   const updateSettings = useStore((s) => s.updateSettings)
+  const storageError = useStorageError()
 
   const google = useGoogle()
-  const current = NAV.find((n) => (n.to === '/' ? pathname === '/' : pathname.startsWith(n.to)))
-
   const syncing = google.driveSync.status === 'syncing' || google.calendarSync.status === 'syncing'
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/70 backdrop-blur-xl">
       <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4 sm:px-6">
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-sm font-semibold tracking-tight text-ink lg:hidden">
-            {current?.label ?? 'Semestre'}
-          </h1>
-          <p className="hidden text-[13px] text-muted lg:block">
-            {format(new Date(), 'EEEE, d MMMM yyyy')}
-          </p>
+        {/* The sidebar carries the switcher on desktop; on mobile it lives here. */}
+        <div className="min-w-0 flex-1 lg:hidden">
+          <SemesterSwitcher compact />
         </div>
+        <div className="hidden min-w-0 flex-1 lg:block">
+          <p className="text-[13px] text-muted">{format(new Date(), 'EEEE, d MMMM yyyy')}</p>
+        </div>
+
+        {storageError && (
+          <span
+            title={storageError}
+            className="flex items-center gap-1.5 rounded-full border border-danger/25 bg-danger-bg px-2.5 py-1 text-[11px] font-medium text-danger"
+          >
+            <TriangleAlert className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Not saving</span>
+          </span>
+        )}
 
         {google.signedIn && (
           <Button

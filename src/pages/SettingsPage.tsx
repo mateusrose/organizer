@@ -24,6 +24,8 @@ import {
   Trash2,
   TriangleAlert,
   Upload,
+  Layers,
+  Sparkles,
 } from 'lucide-react'
 import {
   Badge,
@@ -39,11 +41,12 @@ import {
   SegmentedControl,
   Toggle,
 } from '../components/ui'
-import { useDb, useSettings, useStore } from '../store/useStore'
+import { useAllSemesters, useDb, useSettings, useStore } from '../store/useStore'
 import { useGoogle } from '../store/useGoogle'
 import { toast } from '../store/useToast'
 import { looksLikeBackup } from '../lib/db'
-import { format, relative } from '../lib/date'
+import { sampleDatabase } from '../lib/sample'
+import { fmtDayMonth, format, relative } from '../lib/date'
 import type { SyncState } from '../types'
 import { cn } from '../lib/cn'
 
@@ -58,7 +61,7 @@ const GOOGLE_PERMISSIONS = [
   { label: 'Basic profile', detail: 'your name, email address and picture' },
 ]
 
-type Dialog = 'restore' | 'import' | 'reset' | null
+type Dialog = 'restore' | 'import' | 'reset' | 'sample' | null
 
 export default function SettingsPage() {
   const settings = useSettings()
@@ -80,6 +83,18 @@ export default function SettingsPage() {
   const syncCalendar = useGoogle((s) => s.syncCalendar)
 
   const [dialog, setDialog] = useState<Dialog>(null)
+
+  const semesters = useAllSemesters()
+  const setActiveSemester = useStore((s) => s.setActiveSemester)
+  const orderedSemesters = useMemo(
+    () => [...semesters].sort((a, b) => b.startsOn.localeCompare(a.startsOn)),
+    [semesters],
+  )
+  const coursesPerSemester = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const c of db.courses) map.set(c.semesterId, (map.get(c.semesterId) ?? 0) + 1)
+    return map
+  }, [db.courses])
   const [pendingImport, setPendingImport] = useState<unknown>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
@@ -598,6 +613,53 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* --- semesters --------------------------------------------------- */}
+        <Card>
+          <CardHeader
+            icon={<Layers />}
+            title="Semesters"
+            subtitle="Everything you see is scoped to the active one."
+          />
+
+          <div className="flex flex-col gap-2">
+            {orderedSemesters.map((sem) => {
+              const active = sem.id === db.activeSemesterId
+              return (
+                <div
+                  key={sem.id}
+                  className={cn(
+                    'flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3.5 py-3',
+                    active ? 'border-accent/30 bg-accent-bg' : 'border-line bg-surface-2/50',
+                  )}
+                >
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-2 truncate text-sm font-medium text-ink">
+                      {sem.name}
+                      {sem.archived && <Badge tone="neutral">Archived</Badge>}
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-muted">
+                      {fmtDayMonth(sem.startsOn)} – {fmtDayMonth(sem.endsOn)} ·{' '}
+                      {coursesPerSemester.get(sem.id) ?? 0} courses
+                    </p>
+                  </div>
+                  {active ? (
+                    <Badge tone="accent">Active</Badge>
+                  ) : (
+                    <Button size="sm" variant="secondary" onClick={() => setActiveSemester(sem.id)}>
+                      Switch
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          <p className="mt-3 text-[12px] text-faint">
+            Create, rename, archive and delete semesters from the switcher at the top of the
+            sidebar.
+          </p>
+        </Card>
+
         {/* --- data -------------------------------------------------------- */}
         <Card>
           <CardHeader
@@ -649,6 +711,25 @@ export default function SettingsPage() {
               spring cleaning, wipes it. Drive sync or an occasional export is the real backup.
             </span>
           </p>
+
+          <Divider className="my-5" />
+
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-ink">Load sample data</p>
+              <p className="mt-0.5 text-[12px] text-muted">
+                A full example semester to explore — five courses, graded and upcoming work,
+                syllabus themes and tasks.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              icon={<Sparkles className="h-4 w-4" />}
+              onClick={() => setDialog('sample')}
+            >
+              Load sample data
+            </Button>
+          </div>
 
           <Divider className="my-5" />
 
@@ -726,6 +807,18 @@ export default function SettingsPage() {
         title="Delete everything?"
         message="Every course, assessment, class, study block and task goes away. This cannot be undone."
         confirmLabel="Delete everything"
+      />
+
+      <ConfirmDialog
+        open={dialog === 'sample'}
+        onClose={() => setDialog(null)}
+        onConfirm={() => {
+          replaceDatabase(sampleDatabase())
+          toast.success('Sample semester loaded')
+        }}
+        title="Replace everything with sample data?"
+        message="This overwrites every course, assessment, theme, block and task currently in this browser. Export first if you want to keep what is here."
+        confirmLabel="Load sample data"
       />
     </div>
   )
