@@ -3,7 +3,10 @@ import {
   AlertTriangle,
   Archive,
   ArchiveRestore,
+  BookOpen,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   ExternalLink,
   GraduationCap,
   Layers,
@@ -21,12 +24,15 @@ import type {
   Course,
   CourseColor,
   GradeScale,
+  Semester,
+  Theme,
   Weekday,
 } from '../types'
 import { useSettings, useStore } from '../store/useStore'
 import { useScope } from '../store/scope'
 import { toast } from '../store/useToast'
 import { computeCourseGrade, semesterAverage, totalEcts } from '../lib/grades'
+import { THEME_STATUS_LABEL, isBehind, themeProgress } from '../lib/themes'
 import {
   Badge,
   Button,
@@ -51,6 +57,7 @@ import {
   fmtDateTime,
   fmtTime,
   fromDateTimeInput,
+  toDateInput,
   toDateTimeInput,
 } from '../lib/date'
 
@@ -67,7 +74,6 @@ const FILTERS: { value: Filter; label: string }[] = [
 ]
 
 const CLASS_KINDS: { value: ClassKind; label: string }[] = [
-  { value: 'module', label: 'Module' },
   { value: 'lecture', label: 'Lecture' },
   { value: 'lab', label: 'Lab' },
   { value: 'seminar', label: 'Seminar' },
@@ -76,6 +82,7 @@ const CLASS_KINDS: { value: ClassKind; label: string }[] = [
 
 const NO_ASSESSMENTS: Assessment[] = []
 const NO_CLASSES: ClassEntry[] = []
+const NO_THEMES: Theme[] = []
 
 /** 14 → "14", 14.25 → "14.3" — keeps ECTS and weights readable. */
 const trim = (n: number): string => String(Math.round(n * 10) / 10)
@@ -115,7 +122,7 @@ const scheduleLabel = (c: ClassEntry): string => {
 // ---------------------------------------------------------------------------
 
 export default function Courses() {
-  const { courses, assessments, classes } = useScope()
+  const { courses, assessments, classes, themes, semester } = useScope()
   const settings = useSettings()
   const updateCourse = useStore((s) => s.updateCourse)
   const deleteCourse = useStore((s) => s.deleteCourse)
@@ -123,6 +130,7 @@ export default function Courses() {
   const [filter, setFilter] = useState<Filter>('active')
   const [formFor, setFormFor] = useState<Course | 'new' | null>(null)
   const [classesFor, setClassesFor] = useState<Course | null>(null)
+  const [themesFor, setThemesFor] = useState<Course | null>(null)
   const [deleting, setDeleting] = useState<Course | null>(null)
 
   const scale = settings.gradeScale
@@ -139,6 +147,7 @@ export default function Courses() {
 
   const assessmentsByCourse = useMemo(() => groupBy(assessments, (a) => a.courseId), [assessments])
   const classesByCourse = useMemo(() => groupBy(classes, (c) => c.courseId), [classes])
+  const themesByCourse = useMemo(() => groupBy(themes, (t) => t.courseId), [themes])
 
   const average = useMemo(
     () => semesterAverage(active, assessments, scale),
@@ -234,6 +243,8 @@ export default function Courses() {
               scale={scale}
               onEdit={() => setFormFor(course)}
               onClasses={() => setClassesFor(course)}
+              onThemes={() => setThemesFor(course)}
+              themes={themesByCourse.get(course.id) ?? NO_THEMES}
               onArchive={() => toggleArchive(course)}
               onDelete={() => setDeleting(course)}
             />
@@ -251,6 +262,9 @@ export default function Courses() {
       )}
 
       {classesFor && <ClassesModal course={classesFor} onClose={() => setClassesFor(null)} />}
+      {themesFor && (
+        <ThemesModal course={themesFor} semester={semester} onClose={() => setThemesFor(null)} />
+      )}
 
       <ConfirmDialog
         open={deleting !== null}
@@ -278,18 +292,22 @@ function CourseCard({
   course,
   assessments,
   classes,
+  themes,
   scale,
   onEdit,
   onClasses,
+  onThemes,
   onArchive,
   onDelete,
 }: {
   course: Course
   assessments: Assessment[]
   classes: ClassEntry[]
+  themes: Theme[]
   scale: GradeScale
   onEdit: () => void
   onClasses: () => void
+  onThemes: () => void
   onArchive: () => void
   onDelete: () => void
 }) {
@@ -305,8 +323,8 @@ function CourseCard({
     (a) => a.status !== 'graded' && a.status !== 'submitted' && daysUntil(a.dueAt) >= 0,
   ).length
 
-  const modules = classes.filter((c) => c.kind === 'module')
-  const modulesDone = modules.filter((c) => c.completed).length
+  const progress = themeProgress(themes)
+  const behindCount = themes.filter((t) => isBehind(t)).length
 
   const meta = [
     `${trim(course.ects)} ECTS`,
@@ -432,35 +450,54 @@ function CourseCard({
           )}
         </div>
 
-        {/* classes & modules ---------------------------------------------- */}
+        {/* syllabus ------------------------------------------------------- */}
         <button
           type="button"
-          onClick={onClasses}
-          aria-label={`Manage classes and modules for ${course.name}`}
+          onClick={onThemes}
+          aria-label={`Manage the syllabus for ${course.name}`}
           className="group rounded-xl border border-line bg-surface-2/50 px-3.5 py-2.5 text-left transition-colors duration-150 hover:border-line-strong hover:bg-surface-3"
         >
           <span className="flex items-center justify-between gap-2">
             <span className="inline-flex min-w-0 items-center gap-2 text-[12px] font-medium text-muted group-hover:text-ink">
-              <Layers className="h-3.5 w-3.5 shrink-0 text-faint" />
+              <BookOpen className="h-3.5 w-3.5 shrink-0 text-faint" />
               <span className="truncate">
-                {modules.length > 0
-                  ? `${modulesDone} / ${modules.length} modules done`
-                  : classes.length > 0
-                    ? `${classes.length} ${classes.length === 1 ? 'class' : 'classes'} scheduled`
-                    : 'Add classes & modules'}
+                {progress.total > 0
+                  ? `${progress.done} / ${progress.total} themes done`
+                  : 'Add the syllabus'}
               </span>
             </span>
-            <ChevronRight className="h-3.5 w-3.5 shrink-0 text-faint" />
+            <span className="flex shrink-0 items-center gap-1.5">
+              {behindCount > 0 && <Badge tone="danger">{behindCount} behind</Badge>}
+              <ChevronRight className="h-3.5 w-3.5 text-faint" />
+            </span>
           </span>
-          {modules.length > 0 && (
+          {progress.total > 0 && (
             <ProgressBar
               className="mt-2"
               height={4}
               tone="course"
-              value={modulesDone}
-              max={modules.length}
+              value={progress.done}
+              max={progress.total}
             />
           )}
+        </button>
+
+        {/* classes -------------------------------------------------------- */}
+        <button
+          type="button"
+          onClick={onClasses}
+          aria-label={`Manage scheduled classes for ${course.name}`}
+          className="group flex items-center justify-between gap-2 rounded-xl border border-line bg-surface-2/50 px-3.5 py-2 text-left transition-colors duration-150 hover:border-line-strong hover:bg-surface-3"
+        >
+          <span className="inline-flex min-w-0 items-center gap-2 text-[12px] font-medium text-muted group-hover:text-ink">
+            <Layers className="h-3.5 w-3.5 shrink-0 text-faint" />
+            <span className="truncate">
+              {classes.length > 0
+                ? `${classes.length} ${classes.length === 1 ? 'class' : 'classes'} scheduled`
+                : 'Add live classes'}
+            </span>
+          </span>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-faint" />
         </button>
 
         {/* footer --------------------------------------------------------- */}
@@ -751,7 +788,7 @@ function ColorSwatches({
 }
 
 // ---------------------------------------------------------------------------
-// classes & modules
+// scheduled classes (syllabus units live in ThemesModal)
 // ---------------------------------------------------------------------------
 
 interface ClassForm {
@@ -771,8 +808,8 @@ interface ClassForm {
 
 const emptyClassForm = (): ClassForm => ({
   title: '',
-  kind: 'module',
-  recurrence: 'once',
+  kind: 'lecture',
+  recurrence: 'weekly',
   weekday: 1,
   startTime: '18:00',
   endTime: '20:00',
@@ -814,9 +851,6 @@ function ClassesModal({ course, onClose }: { course: Course; onClose: () => void
         .sort((a, b) => scheduleKey(a).localeCompare(scheduleKey(b))),
     [allClasses, course.id],
   )
-
-  const modules = entries.filter((c) => c.kind === 'module')
-  const modulesDone = modules.filter((c) => c.completed).length
 
   const set = (patch: Partial<ClassForm>) =>
     setForm((prev) => (prev ? { ...prev, ...patch } : prev))
@@ -873,7 +907,7 @@ function ClassesModal({ course, onClose }: { course: Course; onClose: () => void
       open
       onClose={onClose}
       size="lg"
-      title="Classes & modules"
+      title="Scheduled classes"
       subtitle={`${course.code} · ${course.name}`}
       footer={
         editing ? (
@@ -911,24 +945,6 @@ function ClassesModal({ course, onClose }: { course: Course; onClose: () => void
       }
     >
       <div data-course={course.color} className="flex flex-col gap-4">
-        {modules.length > 0 && !editing && (
-          <div className="rounded-card border border-line bg-surface-2/60 px-4 py-3.5">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-[13px] font-medium text-ink">
-                {modulesDone} / {modules.length} modules done
-              </span>
-              <span className="text-[12px] text-muted tabular-nums">
-                {Math.round((modulesDone / modules.length) * 100)}%
-              </span>
-            </div>
-            <ProgressBar
-              className="mt-2.5"
-              tone="course"
-              value={modulesDone}
-              max={modules.length}
-            />
-          </div>
-        )}
 
         {editing && form ? (
           <div className="flex flex-col gap-5">
@@ -1055,7 +1071,7 @@ function ClassesModal({ course, onClose }: { course: Course; onClose: () => void
         ) : entries.length === 0 ? (
           <EmptyState
             icon={<Layers />}
-            title="No classes or modules yet"
+            title="No classes yet"
             message="Async courses are built from modules — add them here and tick each one off as you finish it."
             action={
               <Button
@@ -1091,7 +1107,7 @@ function ClassesModal({ course, onClose }: { course: Course; onClose: () => void
                     {entry.title}
                   </p>
                   <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12px] text-muted">
-                    <Badge tone={entry.kind === 'module' ? 'course' : 'neutral'}>
+                    <Badge tone="neutral">
                       {kindLabel(entry.kind)}
                     </Badge>
                     <span>{scheduleLabel(entry)}</span>
@@ -1142,5 +1158,349 @@ function ClassesModal({ course, onClose }: { course: Course; onClose: () => void
         )}
       </div>
     </Modal>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// syllabus themes
+// ---------------------------------------------------------------------------
+
+const THEME_STATUSES: { value: Theme['status']; label: string }[] = [
+  { value: 'not-started', label: THEME_STATUS_LABEL['not-started'] },
+  { value: 'in-progress', label: THEME_STATUS_LABEL['in-progress'] },
+  { value: 'done', label: THEME_STATUS_LABEL.done },
+]
+
+/** Strips "1.", "2)", "-", "*", "Unit 3 —" and friends off a pasted line. */
+function cleanThemeLine(line: string): string {
+  return line
+    .trim()
+    .replace(/^[-*•]\s+/, '')
+    .replace(/^\d+\s*[.)\]]\s*/, '')
+    .replace(/^(unit|tema|módulo|modulo|module|chapter|cap[íi]tulo)\s+\d+\s*[-–—:.]\s*/i, '')
+    .trim()
+}
+
+function ThemesModal({
+  course,
+  semester,
+  onClose,
+}: {
+  course: Course
+  semester: Semester | null
+  onClose: () => void
+}) {
+  const themes = useScope().themes
+  const addTheme = useStore((s) => s.addTheme)
+  const updateTheme = useStore((s) => s.updateTheme)
+  const deleteTheme = useStore((s) => s.deleteTheme)
+  const spreadThemes = useStore((s) => s.spreadThemes)
+  const reorderThemes = useStore((s) => s.reorderThemes)
+
+  const mine = useMemo(
+    () => themes.filter((t) => t.courseId === course.id).sort((a, b) => a.order - b.order),
+    [themes, course.id],
+  )
+
+  const [bulk, setBulk] = useState('')
+  const [showBulk, setShowBulk] = useState(false)
+  const [spreadFrom, setSpreadFrom] = useState(() =>
+    semester ? toDateInput(semester.startsOn) : '',
+  )
+  const [spreadTo, setSpreadTo] = useState(() => (semester ? toDateInput(semester.endsOn) : ''))
+  const [confirmSpread, setConfirmSpread] = useState(false)
+
+  const pending = useMemo(
+    () => bulk.split('\n').map(cleanThemeLine).filter(Boolean),
+    [bulk],
+  )
+  const progress = themeProgress(mine)
+
+  const addAll = () => {
+    if (pending.length === 0) return
+    // New themes land on the day the syllabus starts; "Spread evenly" is what
+    // turns them into real bands.
+    const anchor = semester?.startsOn ?? new Date().toISOString()
+    pending.forEach((title, i) =>
+      addTheme({
+        courseId: course.id,
+        title,
+        order: mine.length + i,
+        startsOn: anchor,
+        endsOn: anchor,
+      }),
+    )
+    setBulk('')
+    setShowBulk(false)
+    toast.success(`${pending.length} ${pending.length === 1 ? 'theme' : 'themes'} added`)
+  }
+
+  const move = (index: number, delta: number) => {
+    const next = [...mine]
+    const target = index + delta
+    if (target < 0 || target >= next.length) return
+    ;[next[index], next[target]] = [next[target], next[index]]
+    reorderThemes(
+      course.id,
+      next.map((t) => t.id),
+    )
+  }
+
+  const doSpread = () => {
+    if (!spreadFrom || !spreadTo) return
+    spreadThemes(course.id, fromDateTimeInput(spreadFrom), fromDateTimeInput(spreadTo))
+    toast.success(`${mine.length} themes spread across the range`)
+  }
+
+  return (
+    <>
+      <Modal
+        open
+        onClose={onClose}
+        size="lg"
+        title={`Syllabus · ${course.code}`}
+        subtitle="The topics this course teaches, laid out across the term."
+        footer={
+          <Button variant="secondary" onClick={onClose}>
+            Done
+          </Button>
+        }
+      >
+        <div data-course={course.color} className="flex flex-col gap-4">
+          {/* --- spread controls ------------------------------------------ */}
+          {mine.length > 0 && (
+            <div className="rounded-xl border border-line bg-surface-2/50 p-3.5">
+              <div className="flex flex-wrap items-end gap-3">
+                <Field label="From" htmlFor="spread-from" className="min-w-[8.5rem] flex-1">
+                  <Input
+                    id="spread-from"
+                    type="date"
+                    value={spreadFrom}
+                    onChange={(e) => setSpreadFrom(e.target.value)}
+                  />
+                </Field>
+                <Field label="To" htmlFor="spread-to" className="min-w-[8.5rem] flex-1">
+                  <Input
+                    id="spread-to"
+                    type="date"
+                    value={spreadTo}
+                    onChange={(e) => setSpreadTo(e.target.value)}
+                  />
+                </Field>
+                <Button
+                  variant="primary"
+                  disabled={!spreadFrom || !spreadTo || spreadTo <= spreadFrom}
+                  onClick={() => setConfirmSpread(true)}
+                >
+                  Spread evenly
+                </Button>
+              </div>
+              <p className="mt-2 text-[12px] text-faint">
+                Gives every theme an equal slice of the range, in order. Defaults to the semester.
+              </p>
+            </div>
+          )}
+
+          {/* --- list ------------------------------------------------------ */}
+          {mine.length === 0 ? (
+            <EmptyState
+              icon={<BookOpen />}
+              title="No themes yet"
+              message="Add the topics this course covers — paste them all in one go, then spread them across the term."
+              action={
+                <Button variant="primary" onClick={() => setShowBulk(true)}>
+                  Paste the syllabus
+                </Button>
+              }
+            />
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[12px] text-muted">
+                  {progress.done} of {progress.total} done
+                </p>
+                <ProgressBar
+                  className="max-w-40 flex-1"
+                  tone="course"
+                  value={progress.done}
+                  max={progress.total}
+                />
+              </div>
+
+              <ul className="flex flex-col gap-2">
+                {mine.map((theme, i) => (
+                  <ThemeRow
+                    key={theme.id}
+                    theme={theme}
+                    index={i}
+                    isFirst={i === 0}
+                    isLast={i === mine.length - 1}
+                    onMove={(d) => move(i, d)}
+                    onPatch={(patch) => updateTheme(theme.id, patch)}
+                    onDelete={() => deleteTheme(theme.id)}
+                  />
+                ))}
+              </ul>
+            </>
+          )}
+
+          {/* --- bulk add -------------------------------------------------- */}
+          {showBulk ? (
+            <div className="rounded-xl border border-line bg-surface-2/50 p-3.5">
+              <Field
+                label="One theme per line"
+                htmlFor="bulk-themes"
+                hint="Numbering and bullets are stripped automatically."
+              >
+                <Textarea
+                  id="bulk-themes"
+                  rows={6}
+                  autoFocus
+                  value={bulk}
+                  placeholder={'1. Limits and continuity\n2. Derivatives\n3. Integration techniques'}
+                  onChange={(e) => setBulk(e.target.value)}
+                />
+              </Field>
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <p className="text-[12px] text-faint">
+                  {pending.length === 0
+                    ? 'Nothing to add yet'
+                    : `${pending.length} ${pending.length === 1 ? 'theme' : 'themes'} will be added`}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowBulk(false)
+                      setBulk('')
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={pending.length === 0}
+                    onClick={addAll}
+                  >
+                    Add all
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : (
+            mine.length > 0 && (
+              <Button
+                variant="secondary"
+                icon={<Plus className="h-4 w-4" />}
+                onClick={() => setShowBulk(true)}
+              >
+                Add themes
+              </Button>
+            )
+          )}
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={confirmSpread}
+        onClose={() => setConfirmSpread(false)}
+        onConfirm={doSpread}
+        destructive={false}
+        title="Re-date every theme?"
+        message={`All ${mine.length} themes get a new, equal slice of the range. Any dates you set by hand are overwritten.`}
+        confirmLabel="Spread evenly"
+      />
+    </>
+  )
+}
+
+function ThemeRow({
+  theme,
+  index,
+  isFirst,
+  isLast,
+  onMove,
+  onPatch,
+  onDelete,
+}: {
+  theme: Theme
+  index: number
+  isFirst: boolean
+  isLast: boolean
+  onMove: (delta: number) => void
+  onPatch: (patch: Partial<Theme>) => void
+  onDelete: () => void
+}) {
+  const behind = isBehind(theme)
+
+  return (
+    <li
+      className={cn(
+        'flex flex-col gap-2.5 rounded-xl border px-3 py-2.5',
+        behind ? 'border-danger/25 bg-danger-bg' : 'border-line bg-surface-2/50',
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span className="w-5 shrink-0 text-center text-[12px] tabular-nums text-faint">
+          {index + 1}
+        </span>
+        <Input
+          aria-label={`Title of theme ${index + 1}`}
+          value={theme.title}
+          onChange={(e) => onPatch({ title: e.target.value })}
+        />
+        <div className="flex shrink-0 items-center">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Move up"
+            disabled={isFirst}
+            onClick={() => onMove(-1)}
+          >
+            <ChevronUp className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Move down"
+            disabled={isLast}
+            onClick={() => onMove(1)}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon-sm" aria-label="Delete theme" onClick={onDelete}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 pl-7">
+        <Input
+          aria-label="Starts on"
+          type="date"
+          className="w-auto"
+          value={toDateInput(theme.startsOn)}
+          onChange={(e) => e.target.value && onPatch({ startsOn: fromDateTimeInput(e.target.value) })}
+        />
+        <span className="text-[12px] text-faint">→</span>
+        <Input
+          aria-label="Ends on"
+          type="date"
+          className="w-auto"
+          value={toDateInput(theme.endsOn)}
+          onChange={(e) => e.target.value && onPatch({ endsOn: fromDateTimeInput(e.target.value) })}
+        />
+        {behind && <Badge tone="danger">behind</Badge>}
+        <SegmentedControl
+          size="sm"
+          className="ml-auto"
+          value={theme.status}
+          options={THEME_STATUSES}
+          onChange={(status) => onPatch({ status })}
+        />
+      </div>
+    </li>
   )
 }
