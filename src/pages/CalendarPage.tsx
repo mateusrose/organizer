@@ -373,11 +373,15 @@ export default function CalendarPage() {
         cursor = addDays(cursor, 1)
       }
     }
-    // Bands first, so a theme occupies the same row in every day it covers and
-    // therefore reads as one continuous strip across the week.
+    // Deadlines first: a day can run out of room, and an assessment scrolled out
+    // of sight is the one thing here you cannot afford to miss. Theme bands sit
+    // right behind them and keep their own order, so they still read as a strip
+    // — one that now starts below however many deadlines that day carries.
+    const rank = (item: CalItem) => (item.kind === 'assessment' ? 0 : item.kind === 'theme' ? 1 : 2)
     for (const bucket of map.values()) {
       bucket.sort((a, b) => {
-        if ((a.kind === 'theme') !== (b.kind === 'theme')) return a.kind === 'theme' ? -1 : 1
+        const byRank = rank(a) - rank(b)
+        if (byRank !== 0) return byRank
         if (a.kind === 'theme' && b.kind === 'theme') return a.id.localeCompare(b.id)
         return byStart(a, b)
       })
