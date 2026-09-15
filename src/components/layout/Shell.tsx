@@ -79,13 +79,13 @@ export function Shell() {
             end={item.to === '/'}
             className={({ isActive }) =>
               cn(
-                'flex flex-1 flex-col items-center gap-1 rounded-lg py-1.5 text-[10px] font-medium transition-colors',
+                'flex min-w-0 flex-1 flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 text-[10px] font-medium transition-colors',
                 isActive ? 'text-accent-soft' : 'text-faint hover:text-muted',
               )
             }
           >
-            <item.icon className="h-4.5 w-4.5" />
-            {item.short}
+            <item.icon className="h-4.5 w-4.5 shrink-0" />
+            <span className="w-full truncate text-center">{item.short}</span>
           </NavLink>
         ))}
       </nav>

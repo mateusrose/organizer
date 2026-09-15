@@ -1,4 +1,5 @@
 import {
+  BookOpen,
   CalendarDays,
   ClipboardList,
   GraduationCap,
@@ -19,9 +20,10 @@ export interface NavItem {
 export const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', short: 'Home', icon: LayoutDashboard },
   { to: '/courses', label: 'Courses', short: 'Courses', icon: GraduationCap },
+  { to: '/syllabus', label: 'Syllabus', short: 'Topics', icon: BookOpen },
   { to: '/assessments', label: 'Assessments', short: 'Work', icon: ClipboardList },
   { to: '/planner', label: 'Study planner', short: 'Plan', icon: Timer },
-  { to: '/calendar', label: 'Calendar', short: 'Calendar', icon: CalendarDays },
+  { to: '/calendar', label: 'Calendar', short: 'Cal', icon: CalendarDays },
   { to: '/tasks', label: 'Tasks', short: 'Tasks', icon: ListTodo },
-  { to: '/settings', label: 'Settings', short: 'Settings', icon: SettingsIcon },
+  { to: '/settings', label: 'Settings', short: 'More', icon: SettingsIcon },
 ]

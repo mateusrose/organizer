@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Shell } from './components/layout/Shell'
 import Dashboard from './pages/Dashboard'
 import Courses from './pages/Courses'
+import Syllabus from './pages/Syllabus'
 import Assessments from './pages/Assessments'
 import Planner from './pages/Planner'
 import CalendarPage from './pages/CalendarPage'
@@ -37,6 +38,7 @@ export default function App() {
         <Route element={<Shell />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/courses" element={<Courses />} />
+          <Route path="/syllabus" element={<Syllabus />} />
           <Route path="/assessments" element={<Assessments />} />
           <Route path="/planner" element={<Planner />} />
           <Route path="/calendar" element={<CalendarPage />} />
