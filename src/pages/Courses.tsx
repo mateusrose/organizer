@@ -1442,11 +1442,15 @@ function ThemeRow({
 
       {/* `cn` is plain clsx, so `w-auto` would not beat the control's own
           `w-full` — the grid sizes the two dates instead. */}
-      <div className="flex flex-wrap items-center gap-2 pl-7">
-        <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center gap-2">
+      {/* On a phone the dates take the whole row and the status control drops
+          below them: two date inputs plus the control do not fit side by side,
+          and squeezing them leaves the dates too narrow to read. */}
+      <div className="flex flex-col gap-2 pl-0 sm:flex-row sm:flex-wrap sm:items-center sm:pl-7">
+        <div className="grid w-full min-w-0 grid-cols-[1fr_auto_1fr] items-center gap-2 sm:w-auto sm:flex-1">
           <Input
             aria-label="Starts on"
             type="date"
+            className="min-w-0"
             value={toDateInput(theme.startsOn)}
             onChange={(e) => e.target.value && onPatch({ startsOn: fromDateTimeInput(e.target.value) })}
           />
@@ -1454,18 +1458,21 @@ function ThemeRow({
           <Input
             aria-label="Ends on"
             type="date"
+            className="min-w-0"
             value={toDateInput(theme.endsOn)}
             onChange={(e) => e.target.value && onPatch({ endsOn: fromDateTimeInput(e.target.value) })}
           />
         </div>
-        {behind && <Badge tone="danger">behind</Badge>}
-        <SegmentedControl
-          size="sm"
-          className="ml-auto"
-          value={theme.status}
-          options={THEME_STATUSES}
-          onChange={(status) => onPatch({ status })}
-        />
+        <div className="flex items-center gap-2 sm:contents">
+          {behind && <Badge tone="danger">behind</Badge>}
+          <SegmentedControl
+            size="sm"
+            className="ml-auto"
+            value={theme.status}
+            options={THEME_STATUSES}
+            onChange={(status) => onPatch({ status })}
+          />
+        </div>
       </div>
     </li>
   )

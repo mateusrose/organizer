@@ -187,25 +187,29 @@ export default function CalendarPage() {
       courseId ? courseById.get(courseId)?.color : undefined
 
     for (const a of assessments) {
-      const start = toDate(a.dueAt)
-      if (!within(start, start)) continue
+      const due = toDate(a.dueAt)
+      // An assignment or project with a window runs as a band from the day it
+      // opens to the day it is due; everything else is just its deadline.
+      const opens = a.startsAt ? startOfDay(toDate(a.startsAt)) : null
+      const ranged = opens !== null && opens < due
+      const start = ranged ? opens : due
+      const end = ranged ? endOfDay(due) : addMinutes(due, 30)
+      if (!within(start, end)) continue
       list.push({
         id: `as-${a.id}`,
         kind: 'assessment',
         title: a.title,
         start,
-        end: addMinutes(start, 30),
-        allDay: false,
+        end,
+        allDay: ranged,
         courseId: a.courseId,
         color: colorOf(a.courseId),
         href: '/assessments',
         done: a.status === 'submitted' || a.status === 'graded',
-        // The calendar marks the deadline; a ranged assessment says when the
-        // work opened in its detail rather than becoming a second band.
-        detail: a.startsAt
-          ? `${Math.round(a.points)} pts · open since ${fmtDayMonth(a.startsAt)}`
+        detail: ranged
+          ? `${Math.round(a.points)} pts · due ${fmtDayMonth(a.dueAt)}`
           : `${Math.round(a.points)} pts of final grade`,
-        point: true,
+        point: !ranged,
       })
     }
 
