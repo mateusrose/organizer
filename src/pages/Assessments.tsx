@@ -138,7 +138,7 @@ export default function Assessments() {
   const [query, setQuery] = useState('')
   const [courseFilter, setCourseFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open')
-  const [sort, setSort] = useState<SortKey>('urgency')
+  const [sort, setSort] = useState<SortKey>('due')
   const [editor, setEditor] = useState<{ assessment: Assessment | null; grade?: boolean } | null>(
     null,
   )
