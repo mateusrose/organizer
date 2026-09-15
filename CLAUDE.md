@@ -38,8 +38,14 @@ print(hit and (hit['status'], hit['conclusion'], hit['html_url']) or 'no run yet
 ```
 
 A run goes `queued` → `in_progress` → `completed`, and takes roughly a minute; only
-`conclusion == 'success'` counts as published. Poll every ~20s while it is running,
-and report the conclusion, with the run URL if it failed.
+`conclusion == 'success'` counts as published. Report the conclusion, with the run
+URL if it failed.
+
+**Wait ~45s before the first check, then poll no more than every 30s.** The
+unauthenticated API allows 60 requests an hour for the whole machine, and a busy
+session can exhaust it — once it does, every check returns an empty body and the
+deploy looks unverifiable. A tighter loop buys nothing anyway: the run cannot
+finish sooner.
 
 ## Architecture
 
