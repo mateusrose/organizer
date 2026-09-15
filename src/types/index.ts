@@ -287,7 +287,7 @@ export interface DatabaseSummary {
 }
 
 /**
- * Raised the first time a device reconciles with Drive and BOTH sides already
+ * Raised when a device and the remote copy have both moved on and BOTH sides
  * hold real data. Revision is a per-device edit counter, not a clock, so
  * picking a winner automatically can silently destroy the other copy.
  */

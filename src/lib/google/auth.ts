@@ -1,14 +1,12 @@
 import type { GoogleProfile } from '../../types'
 
 /**
- * OAuth scopes requested in one consent screen:
+ * OAuth scopes requested in one consent screen. Google is used for Calendar
+ * only — the database syncs through a private GitHub repository instead, so no
+ * Drive scope is requested.
  *
  * - `openid email profile`                 — identify the signed-in account so the UI
  *                                            can show who the data belongs to.
- * - `drive.appdata`                        — read/write a *private, per-app* folder in
- *                                            Drive. The app can never see the user's
- *                                            other files, and the user can wipe this
- *                                            folder from Drive → Settings → Manage apps.
  * - `calendar.events`                      — create/patch/delete the events this app
  *                                            mirrors (assessments + study blocks).
  * - `calendar.readonly`                    — read existing commitments from every
@@ -21,7 +19,6 @@ export const SCOPES = [
   'openid',
   'email',
   'profile',
-  'https://www.googleapis.com/auth/drive.appdata',
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/calendar.app.created',

@@ -88,7 +88,7 @@ export interface AppState {
   queueEventDeletion: (entry: PendingEventDeletion) => void
   clearPendingDeletions: (entries: PendingEventDeletion[]) => void
 
-  /** Replace the whole database (Drive restore, JSON import). */
+  /** Replace the whole database (sync pull, JSON import, sample data). */
   replaceDatabase: (db: unknown) => void
   resetDatabase: () => void
 }
@@ -432,7 +432,7 @@ export const useStore = create<AppState>()((set, get) => {
     replaceDatabase: (input) => {
       const db = migrate(input)
       // The revision must never move backwards: a restored older export would
-      // otherwise lose to Drive on the next sync and silently undo the import.
+      // otherwise lose to the remote on the next sync and silently undo the import.
       db.revision = Math.max(get().db.revision, db.revision) + 1
       db.updatedAt = now()
       const result = saveDatabase(db)
@@ -440,7 +440,7 @@ export const useStore = create<AppState>()((set, get) => {
     },
     resetDatabase: () => {
       const db = emptyDatabase()
-      // Same reasoning: a wipe has to out-rank whatever is sitting in Drive.
+      // Same reasoning: a wipe has to out-rank whatever is sitting remotely.
       db.revision = get().db.revision + 1
       const result = saveDatabase(db)
       set({ db, storageError: result.ok ? null : (result.error ?? 'Storage unavailable') })

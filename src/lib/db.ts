@@ -91,7 +91,7 @@ interface LegacyCourse extends Omit<Course, 'semesterId'> {
 }
 
 /**
- * Bring a database read from disk or Drive up to the current shape. Missing
+ * Bring a database read from disk or the sync remote up to the current shape. Missing
  * collections are filled in so a partial or older payload never crashes the app.
  */
 export function migrate(input: unknown): Database {

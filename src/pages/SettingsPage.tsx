@@ -58,7 +58,6 @@ const STORAGE_BUDGET = 5 * 1024 * 1024
 
 const GOOGLE_PERMISSIONS = [
   { label: 'Calendar', detail: 'create and update events on your calendars' },
-  { label: 'Drive app folder', detail: 'a private folder only this app can open' },
   { label: 'Basic profile', detail: 'your name, email address and picture' },
 ]
 
@@ -82,6 +81,7 @@ export default function SettingsPage() {
   const syncCalendar = useGoogle((s) => s.syncCalendar)
 
   const [dialog, setDialog] = useState<Dialog>(null)
+  const syncOn = useSync((s) => s.status !== 'off')
 
   const semesters = useAllSemesters()
   const setActiveSemester = useStore((s) => s.setActiveSemester)
@@ -107,7 +107,7 @@ export default function SettingsPage() {
     passing: String(scale.passing),
   })
 
-  // A Drive restore or JSON import can change the scale behind our back.
+  // A sync pull or JSON import can change the scale behind our back.
   useEffect(() => {
     setScaleDraft((d) =>
       Number(d.max) === scale.max && Number(d.passing) === scale.passing
@@ -143,7 +143,7 @@ export default function SettingsPage() {
 
   // --- google client id ---------------------------------------------------
   const savedClientId = settings.googleClientId ?? ''
-  // `null` means untouched, so a Drive restore or import flows straight through.
+  // `null` means untouched, so a sync pull or import flows straight through.
   const [clientIdEdit, setClientIdEdit] = useState<string | null>(null)
   const clientIdDraft = clientIdEdit ?? savedClientId
   const trimmedClientId = clientIdDraft.trim()
@@ -384,8 +384,8 @@ export default function SettingsPage() {
                   and create a project. Any name works — <Mono>Semestre</Mono> is fine.
                 </Step>
                 <Step n={2}>
-                  Go to <Mono>APIs &amp; Services</Mono> → <Mono>Library</Mono> and enable two
-                  things: <Mono>Google Calendar API</Mono> and <Mono>Google Drive API</Mono>.
+                  Go to <Mono>APIs &amp; Services</Mono> → <Mono>Library</Mono> and enable the{' '}
+                  <Mono>Google Calendar API</Mono>.
                 </Step>
                 <Step n={3}>
                   Go to <Mono>OAuth consent screen</Mono>, choose <Mono>External</Mono>, fill in an
@@ -661,28 +661,38 @@ export default function SettingsPage() {
             <TriangleAlert className="mt-px h-4 w-4 shrink-0" />
             <span>
               Browser storage is not permanent — clearing site data, or a browser doing its own
-              spring cleaning, wipes it. Drive sync or an occasional export is the real backup.
+              spring cleaning, wipes it. Sync or an occasional export is the real backup.
             </span>
           </p>
 
           <Divider className="my-5" />
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-ink">Load sample data</p>
-              <p className="mt-0.5 text-[12px] text-muted">
-                A full example semester to explore — five courses, graded and upcoming work,
-                syllabus themes and tasks.
-              </p>
+          {syncOn ? (
+            // Loading the sample would replace the database and push it, wiping
+            // the repository and every other device. Not worth one click.
+            <p className="text-[12px] leading-relaxed text-faint">
+              Sample data is hidden while sync is on, so it cannot overwrite your repository. To
+              see what a filled-in semester looks like, open the app in a private window and load
+              it there — nothing in that window is synced.
+            </p>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink">Load sample data</p>
+                <p className="mt-0.5 text-[12px] text-muted">
+                  A full example semester to explore — five courses, graded and upcoming work,
+                  syllabus themes and tasks.
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                icon={<Sparkles className="h-4 w-4" />}
+                onClick={() => setDialog('sample')}
+              >
+                Load sample data
+              </Button>
             </div>
-            <Button
-              variant="secondary"
-              icon={<Sparkles className="h-4 w-4" />}
-              onClick={() => setDialog('sample')}
-            >
-              Load sample data
-            </Button>
-          </div>
+          )}
 
           <Divider className="my-5" />
 
@@ -709,8 +719,8 @@ export default function SettingsPage() {
           <p className="text-[13px] leading-relaxed text-muted">
             Semestre is local-first. There is no server behind it and nothing is tracked: your
             courses, deadlines and study plan are held in this browser, and go nowhere else unless
-            you connect Google — in which case the copy lands in your own Drive and your own
-            calendar, under your account.
+            you turn on sync — in which case the copy lands in a private repository you own, and,
+            if you connect Google, in your own calendar.
           </p>
           <p className="mt-3 text-[12px] text-faint">
             Version {APP_VERSION} · data format v{db.version} · revision {db.revision}
@@ -738,6 +748,11 @@ export default function SettingsPage() {
               This file holds {describeBackup(pendingImport)}. It replaces everything currently in
               this browser — export the current data first if you might want it back.
             </span>
+            {syncOn && (
+              <span className="mt-2 block">
+                It is also pushed to the connected repository, so it reaches your other devices.
+              </span>
+            )}
           </>
         }
         confirmLabel="Import"
@@ -752,7 +767,11 @@ export default function SettingsPage() {
           toast.success('Everything deleted')
         }}
         title="Delete everything?"
-        message="Every course, assessment, class, study block and task goes away. This cannot be undone."
+        message={
+          syncOn
+            ? 'Every course, assessment, class, study block and task goes away — here, in the connected repository, and on every other device that syncs. This cannot be undone.'
+            : 'Every course, assessment, class, study block and task goes away. This cannot be undone.'
+        }
         confirmLabel="Delete everything"
       />
 

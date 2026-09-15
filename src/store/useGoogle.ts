@@ -87,7 +87,7 @@ const tokenErrorMessage = (error: GoogleTokenErrorEvent): string => {
     case 'popup_failed_to_open':
       return 'Google could not open its sign-in window — allow pop-ups for this site.'
     case 'access_denied':
-      return 'Access was declined. Semestre needs Drive and Calendar access to sync.'
+      return 'Access was declined. Semestre needs Calendar access to mirror your deadlines.'
     default:
       return error.message || 'Google sign-in failed.'
   }
