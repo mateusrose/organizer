@@ -29,9 +29,11 @@ export type NewCourse = Omit<Course, Stamped | 'archived' | 'semesterId'> & {
   /** Defaults to the active semester. */
   semesterId?: string
 }
-export type NewTheme = Omit<Theme, Stamped | 'status' | 'order'> & {
+export type NewTheme = Omit<Theme, Stamped | 'status' | 'order' | 'todos' | 'resources'> & {
   status?: Theme['status']
   order?: number
+  todos?: Theme['todos']
+  resources?: Theme['resources']
 }
 export type NewAssessment = Omit<Assessment, Stamped>
 export type NewClass = Omit<ClassEntry, Stamped | 'completed'> & { completed?: boolean }
@@ -195,6 +197,10 @@ export const useStore = create<AppState>()((set, get) => {
       const theme: Theme = {
         status: 'not-started',
         order: siblings.length,
+        // A theme seeded from the course page starts with an empty checklist
+        // and no resources; the syllabus editor is where those get filled in.
+        todos: [],
+        resources: [],
         ...input,
         id: uid('thm'),
         createdAt: now(),
@@ -292,6 +298,9 @@ export const useStore = create<AppState>()((set, get) => {
         db.assessments = db.assessments.filter((a) => a.id !== id)
         db.studyBlocks = db.studyBlocks.filter((b) => b.assessmentId !== id)
         db.tasks = db.tasks.map((t) =>
+          t.assessmentId === id ? { ...t, assessmentId: undefined } : t,
+        )
+        db.themes = db.themes.map((t) =>
           t.assessmentId === id ? { ...t, assessmentId: undefined } : t,
         )
       }),

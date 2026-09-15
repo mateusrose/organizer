@@ -165,7 +165,8 @@ export function migrate(input: unknown): Database {
             startsOn: spans[i].startsOn,
             endsOn: spans[i].endsOn,
             status: m.completed ? 'done' : 'not-started',
-            url: m.url,
+            todos: [],
+            resources: m.url ? [{ id: uid('res'), title: m.title, kind: 'link' as const, url: m.url }] : [],
             createdAt: m.createdAt,
             updatedAt: stamp,
           })
@@ -202,6 +203,14 @@ export function migrate(input: unknown): Database {
   for (const c of courses) {
     if (!c.semesterId || !known.has(c.semesterId)) c.semesterId = activeSemesterId
   }
+
+  // A theme's checklist and resources are collections the UI maps over, so they
+  // have to exist even on a payload written before they did.
+  themes = themes.map((t) => ({
+    ...t,
+    todos: Array.isArray(t.todos) ? t.todos : [],
+    resources: Array.isArray(t.resources) ? t.resources : [],
+  }))
 
   // --- v2 → v3: several people teach a course, each with a role -------------
   for (const c of courses) {

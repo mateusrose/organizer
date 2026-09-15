@@ -15,6 +15,13 @@ export function nextTheme(themes: Theme[], now: Date = new Date()): Theme | unde
     .sort((a, b) => a.startsOn.localeCompare(b.startsOn))[0]
 }
 
+/** How far through a theme's own checklist the student is. */
+export function todoProgress(theme: Theme): { done: number; total: number; pct: number } {
+  const total = theme.todos.length
+  const done = theme.todos.filter((t) => t.done).length
+  return { done, total, pct: total > 0 ? (done / total) * 100 : 0 }
+}
+
 export function themeProgress(themes: Theme[]): { done: number; total: number; pct: number } {
   const total = themes.length
   const done = themes.filter((t) => t.status === 'done').length

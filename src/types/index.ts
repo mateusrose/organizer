@@ -74,6 +74,32 @@ export type ThemeStatus = 'not-started' | 'in-progress' | 'done'
  * the calendar so the student always knows what they *should* be studying now,
  * independently of any task or deadline.
  */
+/** One checkable step of the work a theme asks for. */
+export interface ThemeTodo {
+  id: string
+  text: string
+  done: boolean
+}
+
+export const RESOURCE_KINDS = ['reading', 'video', 'slides', 'exercise', 'link'] as const
+export type ResourceKind = (typeof RESOURCE_KINDS)[number]
+
+export const RESOURCE_KIND_LABEL: Record<ResourceKind, string> = {
+  reading: 'Reading',
+  video: 'Video',
+  slides: 'Slides',
+  exercise: 'Exercises',
+  link: 'Link',
+}
+
+/** Something to read, watch or work through for a theme. */
+export interface LearningResource {
+  id: string
+  title: string
+  kind: ResourceKind
+  url?: string
+}
+
 export interface Theme {
   id: string
   courseId: string
@@ -85,7 +111,14 @@ export interface Theme {
   endsOn: ISODate
   status: ThemeStatus
   description?: string
-  url?: string
+  /**
+   * The assessment this unit feeds, chosen by the student. The theme owns the
+   * date range the work happens in; the assessment keeps only its own deadline.
+   */
+  assessmentId?: string
+  /** The work itself, as checkable points. */
+  todos: ThemeTodo[]
+  resources: LearningResource[]
   createdAt: ISODate
   updatedAt: ISODate
 }
@@ -239,7 +272,7 @@ export interface Settings {
 // Persisted database
 // ---------------------------------------------------------------------------
 
-export const DB_VERSION = 4
+export const DB_VERSION = 5
 
 /** A calendar event this app wrote that still needs deleting remotely. */
 export interface PendingEventDeletion {

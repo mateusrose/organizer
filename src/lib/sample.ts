@@ -8,8 +8,10 @@ import type {
   CourseColor,
   Database,
   Instructor,
+  LearningResource,
   Task,
   Theme,
+  ThemeTodo,
   Weekday,
 } from '../types'
 
@@ -149,10 +151,20 @@ export function sampleDatabase(now: Date = new Date()): Database {
       startsOn: spans[i].startsOn,
       endsOn: spans[i].endsOn,
       status: i < doneCount ? 'done' : i === doneCount ? 'in-progress' : 'not-started',
+      todos: [],
+      resources: [],
       createdAt: stamp,
       updatedAt: stamp,
     }))
   }
+
+  const todo = (text: string, done = false): ThemeTodo => ({ id: uid('td'), text, done })
+  const resource = (title: string, kind: LearningResource['kind'], url?: string): LearningResource => ({
+    id: uid('res'),
+    title,
+    kind,
+    url,
+  })
 
   db.themes = [
     ...mkThemes(
@@ -173,6 +185,36 @@ export function sampleDatabase(now: Date = new Date()): Database {
     ),
     ...mkThemes(english, ['Technical writing', 'Presentations', 'Documentation'], 1),
   ]
+
+  // Fill one theme in properly, so the syllabus detail has something to show.
+  const pointers = db.themes.find((t) => t.title === 'Pointers and memory')
+  if (pointers) {
+    pointers.description =
+      'Addresses, dynamic allocation and the ownership rules the project leans on.'
+    pointers.assessmentId = db.assessments.find(
+      (a) => a.courseId === programming.id && a.kind === 'project',
+    )?.id
+    pointers.todos = [
+      todo('Read chapter 6 and take notes', true),
+      todo('Work through the malloc/free exercises', true),
+      todo('Draw the stack vs heap diagram from memory'),
+      todo('Fix the leaks flagged by valgrind in lab 3'),
+    ]
+    pointers.resources = [
+      resource('K&R chapter 5 — Pointers and Arrays', 'reading'),
+      resource('Lecture 7: memory layout', 'video', 'https://example.edu/prg102/lec7'),
+      resource('Pointer exercise sheet', 'exercise', 'https://example.edu/prg102/ex7.pdf'),
+    ]
+  }
+
+  const derivatives = db.themes.find((t) => t.title === 'Derivatives')
+  if (derivatives) {
+    derivatives.todos = [
+      todo('Memorise the differentiation rules', true),
+      todo('Problem set 4, odd numbers'),
+    ]
+    derivatives.resources = [resource('Chain rule worked examples', 'slides')]
+  }
 
   const mkTask = (
     title: string,
