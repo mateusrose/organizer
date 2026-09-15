@@ -57,8 +57,22 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
   return <input {...rest} className={cn(CONTROL, 'h-9.5', className)} />
 }
 
-export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...rest} className={cn(CONTROL, 'resize-y py-2 leading-relaxed', className)} />
+/**
+ * Multi-line fields open tall enough to write in — two or three rows invites a
+ * one-liner. Pass `rows` to override.
+ */
+export function Textarea({
+  className,
+  rows = 5,
+  ...rest
+}: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  return (
+    <textarea
+      rows={rows}
+      {...rest}
+      className={cn(CONTROL, 'resize-y py-2 leading-relaxed', className)}
+    />
+  )
 }
 
 export function Select({

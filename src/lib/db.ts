@@ -1,4 +1,4 @@
-import { DB_VERSION } from '../types'
+import { ASSESSMENT_MODES, DB_VERSION } from '../types'
 import type {
   ClassEntry,
   Course,
@@ -204,11 +204,11 @@ export function migrate(input: unknown): Database {
     if (!c.semesterId || !known.has(c.semesterId)) c.semesterId = activeSemesterId
   }
 
-  // Assessments written before group work existed are individual, which is what
+  // Assessments written before the mode existed are individual, which is what
   // the field defaults to anyway.
   const assessments = (raw.assessments ?? []).map((a) => ({
     ...a,
-    mode: a.mode === 'group' ? ('group' as const) : ('individual' as const),
+    mode: ASSESSMENT_MODES.includes(a.mode) ? a.mode : ('individual' as const),
   }))
 
   // A theme's checklist and resources are collections the UI maps over, so they

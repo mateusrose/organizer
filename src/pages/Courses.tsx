@@ -802,7 +802,6 @@ function CourseFormModal({
         <Field label="Notes" htmlFor="course-notes">
           <Textarea
             id="course-notes"
-            rows={3}
             value={form.notes}
             placeholder="Exam is open book · lab reports due the Friday after each session"
             onChange={(e) => set({ notes: e.target.value })}

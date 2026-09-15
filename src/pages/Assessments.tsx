@@ -15,6 +15,7 @@ import {
   Plus,
   Presentation,
   Search,
+  MonitorCheck,
   Send,
   Trash,
   Users,
@@ -99,6 +100,11 @@ type StatusFilter = 'open' | 'submitted' | 'graded' | 'all'
 type SortKey = 'urgency' | 'due' | 'weight' | 'course'
 
 const kindMeta = (kind: AssessmentKind) => KINDS.find((k) => k.value === kind) ?? KINDS[0]
+
+function ModeIcon({ mode }: { mode: AssessmentMode }) {
+  const Icon = mode === 'wiseflow' ? MonitorCheck : Users
+  return <Icon className="h-3 w-3" />
+}
 const statusLabel = (status: AssessmentStatus) =>
   STATUSES.find((s) => s.value === status)?.label ?? status
 
@@ -453,9 +459,9 @@ function AssessmentRow({
                 {a.title}
               </button>
               <Badge icon={<KindIcon className="h-3 w-3" />}>{kind.label}</Badge>
-              {a.mode === 'group' && (
-                <Badge icon={<Users className="h-3 w-3" />}>
-                  {ASSESSMENT_MODE_LABEL.group}
+              {a.mode !== 'individual' && (
+                <Badge icon={<ModeIcon mode={a.mode} />}>
+                  {ASSESSMENT_MODE_LABEL[a.mode]}
                 </Badge>
               )}
               {a.url && (
@@ -996,7 +1002,6 @@ function AssessmentModal({
         <Field className="sm:col-span-2" label="Notes" htmlFor={`${fid}-notes`}>
           <Textarea
             id={`${fid}-notes`}
-            rows={3}
             value={form.description}
             onChange={(e) => set('description', e.target.value)}
             placeholder="Requirements, deliverables, anything worth remembering."

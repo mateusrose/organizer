@@ -134,13 +134,17 @@ export type AssessmentKind =
 
 export type AssessmentStatus = 'todo' | 'in-progress' | 'submitted' | 'graded'
 
-/** Whether the student hands this in alone or with a group. */
-export const ASSESSMENT_MODES = ['individual', 'group'] as const
+/**
+ * How the assessment is sat: alone, with a group, or through Wiseflow, the
+ * digital exam platform — which says as much about how you prepare as the kind does.
+ */
+export const ASSESSMENT_MODES = ['individual', 'group', 'wiseflow'] as const
 export type AssessmentMode = (typeof ASSESSMENT_MODES)[number]
 
 export const ASSESSMENT_MODE_LABEL: Record<AssessmentMode, string> = {
   individual: 'Individual',
   group: 'Group',
+  wiseflow: 'Wiseflow',
 }
 
 /**

@@ -679,7 +679,6 @@ function ThemeEditor({
           <Field label="Notes" htmlFor="theme-notes">
             <Textarea
               id="theme-notes"
-              rows={2}
               value={description}
               placeholder="What this unit is actually about"
               onChange={(e) => setDescription(e.target.value)}
