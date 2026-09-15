@@ -5,6 +5,8 @@ import {
   loadCredentials,
   patchCredentials,
   saveCredentials,
+  setUploadEnabled,
+  uploadEnabled,
   type SyncCredentials,
 } from '../lib/github/credentials'
 import { ConflictError, fetchDocument, putDocument } from '../lib/github/repo'
@@ -23,6 +25,10 @@ interface SyncState {
   error: string | null
   /** Set when the remote moved underneath us; nothing is written until resolved. */
   conflict: SyncConflict | null
+
+  /** False while this device is read-only: it pulls, but never writes. */
+  uploads: boolean
+  setUploads: (on: boolean) => void
 
   configured: () => boolean
   /** Store credentials and adopt the remote copy if there is one. */
@@ -77,6 +83,22 @@ export const useSync = create<SyncState>()((set, get) => ({
   lastSyncAt: loadCredentials()?.lastSyncAt ?? null,
   error: null,
   conflict: null,
+  uploads: uploadEnabled(),
+
+  setUploads: (on) => {
+    setUploadEnabled(on)
+    set({ uploads: on })
+    if (on) {
+      // Anything edited while read-only is still sitting here unsent.
+      if (dirty) get().schedulePush()
+      toast.info('This device can now upload to GitHub')
+    } else {
+      if (timer) clearTimeout(timer)
+      timer = null
+      set((st) => (st.status === 'dirty' ? { status: 'idle' } : {}))
+      toast.info('Uploads off — this device only reads from GitHub')
+    }
+  },
 
   configured: () => loadCredentials() !== null,
 
@@ -104,7 +126,13 @@ export const useSync = create<SyncState>()((set, get) => ({
         return
       }
 
-      // Nothing useful remotely — seed it from this device.
+      // Nothing useful remotely — seed it from this device, if it may write.
+      if (!uploadEnabled()) {
+        pulledThisSession = true
+        set({ status: 'idle' })
+        toast.info('Connected read-only — turn on uploads to back this device up')
+        return
+      }
       const sha = await putDocument(creds, local, remote?.sha, 'Set up Semestre sync')
       patchCredentials({ sha, lastSyncAt: new Date().toISOString() })
       pulledThisSession = true
@@ -173,6 +201,12 @@ export const useSync = create<SyncState>()((set, get) => ({
   push: async (opts) => {
     const creds = loadCredentials()
     if (!creds || get().conflict) return
+    // Read-only device: keep the edit pending so turning uploads on sends it,
+    // rather than dropping it on the floor.
+    if (!uploadEnabled()) {
+      dirty = true
+      return
+    }
     if (!pulledThisSession && !opts?.force) {
       // Have not seen the remote yet this session — pull first, then retry.
       await get().pull({ silent: true })
@@ -233,6 +267,7 @@ export const useSync = create<SyncState>()((set, get) => ({
   schedulePush: () => {
     if (!loadCredentials()) return
     dirty = true
+    if (!uploadEnabled()) return
     set((s) => (s.status === 'idle' ? { status: 'dirty' } : {}))
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
@@ -242,7 +277,7 @@ export const useSync = create<SyncState>()((set, get) => ({
   },
 
   flush: () => {
-    if (!dirty || !loadCredentials()) return
+    if (!dirty || !loadCredentials() || !uploadEnabled()) return
     if (timer) clearTimeout(timer)
     timer = null
     void get().push()
@@ -262,6 +297,9 @@ export const useSync = create<SyncState>()((set, get) => ({
         dirty = false
         toast.success('Took the copy from GitHub')
       } else {
+        if (!uploadEnabled()) {
+          throw new Error('Uploads are off on this device — turn them on to push this copy.')
+        }
         const sha = await putDocument(
           creds,
           useStore.getState().db,

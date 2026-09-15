@@ -5,7 +5,7 @@ import { relative } from '../lib/date'
 import { loadCredentials } from '../lib/github/credentials'
 import { parseRepoRef, probe, type ProbeResult } from '../lib/github/repo'
 import { useSync } from '../store/useSync'
-import { Button, Card, CardHeader, ConfirmDialog, Field, Input, Spinner } from './ui'
+import { Button, Card, CardHeader, ConfirmDialog, Field, Input, Spinner, Toggle } from './ui'
 
 const TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new'
 const NEW_REPO_URL = 'https://github.com/new'
@@ -23,6 +23,8 @@ export function SyncSetupCard() {
   const disconnect = useSync((s) => s.disconnect)
   const pull = useSync((s) => s.pull)
   const push = useSync((s) => s.push)
+  const uploads = useSync((s) => s.uploads)
+  const setUploads = useSync((s) => s.setUploads)
 
   const existing = loadCredentials()
   const [token, setToken] = useState('')
@@ -89,11 +91,15 @@ export function SyncSetupCard() {
               <p className="mt-0.5 text-[12px] text-muted">
                 {status === 'syncing'
                   ? 'Syncing…'
-                  : status === 'dirty'
-                    ? 'Unsaved changes — backing up shortly'
-                    : lastSyncAt
-                      ? `Last synced ${relative(lastSyncAt)}`
-                      : 'Not synced yet'}
+                  : !uploads
+                    ? lastSyncAt
+                      ? `Read-only · pulled ${relative(lastSyncAt)}`
+                      : 'Read-only · not pulled yet'
+                    : status === 'dirty'
+                      ? 'Unsaved changes — backing up shortly'
+                      : lastSyncAt
+                        ? `Last synced ${relative(lastSyncAt)}`
+                        : 'Not synced yet'}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -105,7 +111,13 @@ export function SyncSetupCard() {
               >
                 Pull
               </Button>
-              <Button size="sm" variant="secondary" onClick={() => void push({ force: true })}>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!uploads}
+                title={uploads ? undefined : 'Uploads are off on this device'}
+                onClick={() => void push({ force: true })}
+              >
                 Push
               </Button>
               <Button
@@ -117,6 +129,19 @@ export function SyncSetupCard() {
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>
+          </div>
+
+          <div className="rounded-xl border border-line bg-surface-2/50 px-3.5 py-3">
+            <Toggle
+              checked={uploads}
+              onChange={setUploads}
+              label="Upload changes from this device"
+              hint={
+                uploads
+                  ? 'This browser writes its copy back to the repository.'
+                  : 'This browser only reads. Nothing here can overwrite the shared copy.'
+              }
+            />
           </div>
 
           {error && (

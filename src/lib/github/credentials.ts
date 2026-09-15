@@ -64,6 +64,33 @@ export function clearCredentials(): void {
   }
 }
 
+/**
+ * Per-device upload switch.
+ *
+ * Kept out of `Database` for the same reason as the credentials: a setting that
+ * travels inside the synced document would be turned on for every device the
+ * moment one of them turned it on. Uploading is what can destroy the shared
+ * copy, so a browser starts read-only and has to be told otherwise.
+ */
+const UPLOAD_KEY = 'semestre.github.upload'
+
+export function uploadEnabled(): boolean {
+  try {
+    return localStorage.getItem(UPLOAD_KEY) === 'on'
+  } catch {
+    return false
+  }
+}
+
+export function setUploadEnabled(on: boolean): void {
+  try {
+    if (on) localStorage.setItem(UPLOAD_KEY, 'on')
+    else localStorage.removeItem(UPLOAD_KEY)
+  } catch {
+    // Private window or full storage — the caller surfaces the failure.
+  }
+}
+
 /** True once this device has completed a reconciliation with the remote. */
 export function hasSyncedBefore(): boolean {
   return Boolean(loadCredentials()?.lastSyncAt)
