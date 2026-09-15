@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Shell } from './components/layout/Shell'
 import Dashboard from './pages/Dashboard'
 import Courses from './pages/Courses'
@@ -9,8 +9,9 @@ import Planner from './pages/Planner'
 import CalendarPage from './pages/CalendarPage'
 import Tasks from './pages/Tasks'
 import SettingsPage from './pages/SettingsPage'
-import { useSettings } from './store/useStore'
+import { registerBackup, useSettings } from './store/useStore'
 import { useGoogle } from './store/useGoogle'
+import { isStale, useSync } from './store/useSync'
 
 export default function App() {
   const settings = useSettings()
@@ -34,6 +35,8 @@ export default function App() {
 
   return (
     <HashRouter>
+      <SyncRunner />
+      <SetupRedirect />
       <Routes>
         <Route element={<Shell />}>
           <Route path="/" element={<Dashboard />} />
@@ -49,4 +52,68 @@ export default function App() {
       </Routes>
     </HashRouter>
   )
+}
+
+/**
+ * Keeps the database talking to GitHub: pushes after edits, pulls when the app
+ * opens and when a backgrounded tab comes back, and makes a last attempt to
+ * save before the tab goes away.
+ */
+function SyncRunner() {
+  const pull = useSync((s) => s.pull)
+  const flush = useSync((s) => s.flush)
+  const schedulePush = useSync((s) => s.schedulePush)
+
+  useEffect(() => {
+    registerBackup(schedulePush)
+    return () => registerBackup(() => {})
+  }, [schedulePush])
+
+  useEffect(() => {
+    if (!useSync.getState().configured()) return
+    void pull({ silent: true })
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        // Last chance before the tab is frozen or closed.
+        flush()
+        return
+      }
+      // Coming back: the other device may have written while we were away.
+      if (isStale()) void pull({ silent: true })
+    }
+
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', flush)
+    }
+  }, [pull, flush])
+
+  return null
+}
+
+/**
+ * Sends a brand-new browser to Settings, where the sync credentials live. Only
+ * from the landing route, and only once per tab, so it never traps someone who
+ * wants to look around without setting anything up.
+ */
+function SetupRedirect() {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+
+  useEffect(() => {
+    if (pathname !== '/') return
+    if (useSync.getState().configured()) return
+    try {
+      if (sessionStorage.getItem('semestre.setupPrompted')) return
+      sessionStorage.setItem('semestre.setupPrompted', '1')
+    } catch {
+      return // Storage blocked: better to show the app than to redirect forever.
+    }
+    navigate('/settings', { replace: true })
+  }, [pathname, navigate])
+
+  return null
 }

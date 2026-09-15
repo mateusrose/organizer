@@ -95,6 +95,16 @@ export interface AppState {
 
 const now = () => new Date().toISOString()
 
+/**
+ * Late-bound to avoid an import cycle: useSync imports this store to read the
+ * database, so it cannot be imported at module scope here.
+ */
+let backup: (() => void) | null = null
+export function registerBackup(fn: () => void) {
+  backup = fn
+}
+const scheduleBackup = () => backup?.()
+
 /** Remember a remote event that must be deleted on the next calendar sync. */
 function queueDeletion(db: Database, eventId: string) {
   const calendarId = db.settings.studyCalendarId
@@ -123,6 +133,10 @@ export const useStore = create<AppState>()((set, get) => {
       const result = saveDatabase(db)
       return { db, storageError: result.ok ? null : (result.error ?? 'Storage unavailable') }
     })
+    // Every mutation funnels through here, so hooking the backup in at this one
+    // point means a new action can never forget to sync. Navigation and
+    // filtering never call commit, so browsing writes nothing.
+    scheduleBackup()
   }
 
   const patchIn = <T extends { id: string; updatedAt: string }>(

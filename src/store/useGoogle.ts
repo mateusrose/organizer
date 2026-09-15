@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Assessment, CalendarEvent, Course, Database, StudyBlock, SyncState } from '../types'
+import type { Assessment, CalendarEvent, Course, StudyBlock, SyncState } from '../types'
 import type { GoogleState } from './googleTypes'
 import { useStore } from './useStore'
 import { toast } from './useToast'
@@ -14,15 +14,6 @@ import {
   saveSession,
   waitForGis,
 } from '../lib/google/auth'
-import {
-  downloadDatabase,
-  hasContent,
-  hasSyncedBefore,
-  markSynced,
-  mergeDatabases,
-  summarise,
-  uploadDatabase,
-} from '../lib/google/drive'
 import {
   deleteEvent,
   ensureStudyCalendar,
@@ -141,12 +132,6 @@ const requestTokenAsync = (consent: boolean): Promise<TokenResult> =>
  */
 let refreshing: Promise<string> | null = null
 
-/**
- * The Drive copy behind an unresolved `driveConflict`. Held outside the store
- * so a whole database never sits in React state.
- */
-let pendingRemote: Database | null = null
-
 const ensureToken = async (): Promise<string> => {
   const { accessToken, expiresAt } = useGoogle.getState()
   if (accessToken && expiresAt && expiresAt - SKEW_MS > Date.now()) return accessToken
@@ -259,9 +244,7 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
   accessToken: null,
   expiresAt: null,
   error: null,
-  driveSync: { status: 'idle' },
   calendarSync: { status: 'idle' },
-  driveConflict: null,
 
   init: (clientId) => {
     const id = clientId.trim()
@@ -322,9 +305,6 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
       set({ signedIn: true, profile, accessToken, expiresAt, connecting: false, error: null })
       toast.success(`Connected as ${profile.email || profile.name}`)
 
-      if (useStore.getState().db.settings.driveSyncEnabled) {
-        void get().syncDrive('auto')
-      }
     } catch (err) {
       const message = messageOf(err)
       set({ connecting: false, signedIn: false, error: message })
@@ -347,92 +327,9 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
       expiresAt: null,
       connecting: false,
       error: null,
-      driveSync: { status: 'idle' },
-      calendarSync: { status: 'idle' },
+          calendarSync: { status: 'idle' },
     })
     toast.info('Disconnected from Google')
-  },
-
-  syncDrive: async (direction = 'auto') => {
-    if (!get().signedIn) {
-      const message = 'Connect your Google account first.'
-      set({ driveSync: { status: 'error', message, lastSyncedAt: lastSyncedAt(get().driveSync) } })
-      toast.error(message)
-      return
-    }
-
-    const previous = lastSyncedAt(get().driveSync)
-    set({ driveSync: { status: 'syncing' } })
-    try {
-      const summary = await authed(async (token) => {
-        if (direction === 'push') {
-          await uploadDatabase(token, useStore.getState().db)
-          markSynced()
-          return 'Backed up to Drive.'
-        }
-
-        if (direction === 'pull') {
-          const remote = await downloadDatabase(token)
-          if (!remote) return 'Nothing in Drive to restore yet.'
-          useStore.getState().replaceDatabase(remote)
-          markSynced()
-          return 'Restored the Drive copy.'
-        }
-
-        const remote = await downloadDatabase(token)
-        const local = useStore.getState().db
-
-        // `revision` counts edits on one device, so it cannot order two
-        // histories that grew apart. The first time this browser meets Drive
-        // and both sides hold real work, ask instead of picking.
-        if (!hasSyncedBefore() && remote && hasContent(local) && hasContent(remote)) {
-          pendingRemote = remote
-          set({ driveConflict: { local: summarise(local), remote: summarise(remote) } })
-          return 'Drive already has a backup — choose which copy to keep.'
-        }
-
-        const { winner, reason } = mergeDatabases(local, remote)
-        if (winner === local) {
-          await uploadDatabase(token, local)
-        } else {
-          useStore.getState().replaceDatabase(winner)
-        }
-        markSynced()
-        return reason
-      })
-
-      set({ driveSync: { status: 'idle', lastSyncedAt: new Date().toISOString() } })
-      toast.success(summary)
-    } catch (err) {
-      const message = messageOf(err)
-      set({ driveSync: { status: 'error', message, lastSyncedAt: previous } })
-      toast.error(message)
-    }
-  },
-
-  resolveDriveConflict: async (choice) => {
-    const remote = pendingRemote
-    set({ driveConflict: null, driveSync: { status: 'syncing' } })
-    try {
-      await authed(async (token) => {
-        if (choice === 'remote') {
-          if (!remote) throw new Error('That Drive copy is no longer available.')
-          useStore.getState().replaceDatabase(remote)
-        } else {
-          await uploadDatabase(token, useStore.getState().db)
-        }
-      })
-      pendingRemote = null
-      markSynced()
-      set({ driveSync: { status: 'idle', lastSyncedAt: new Date().toISOString() } })
-      toast.success(
-        choice === 'remote' ? 'Restored the Drive copy.' : 'Kept this device and backed it up.',
-      )
-    } catch (err) {
-      const message = messageOf(err)
-      set({ driveSync: { status: 'error', message } })
-      toast.error(message)
-    }
   },
 
   syncCalendar: async () => {

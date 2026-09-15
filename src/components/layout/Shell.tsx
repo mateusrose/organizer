@@ -4,7 +4,7 @@ import { NAV } from './nav'
 import { TopBar } from './TopBar'
 import { Toaster } from '../ui/Toaster'
 import { SemesterSwitcher } from '../SemesterSwitcher'
-import { DriveConflictDialog } from '../DriveConflictDialog'
+import { SyncConflictDialog } from '../SyncConflictDialog'
 
 export function Shell() {
   const { pathname } = useLocation()
@@ -69,7 +69,7 @@ export function Shell() {
           <Outlet />
         </main>
         <Toaster />
-        <DriveConflictDialog />
+        <SyncConflictDialog />
       </div>
 
       {/* --- mobile bottom nav ------------------------------------------ */}

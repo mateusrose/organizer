@@ -1,4 +1,4 @@
-import type { CalendarEvent, DriveConflict, GoogleProfile, SyncState } from '../types'
+import type { CalendarEvent, GoogleProfile, SyncState } from '../types'
 
 /**
  * Contract for the Google integration store (`src/store/useGoogle.ts`).
@@ -18,14 +18,7 @@ export interface GoogleState {
   /** Last error surfaced to the user, if any. */
   error: string | null
 
-  driveSync: SyncState
   calendarSync: SyncState
-
-  /**
-   * Set instead of merging when this device has never synced and both it and
-   * Drive already hold data. The user picks; nothing is written until they do.
-   */
-  driveConflict: DriveConflict | null
 
   /** Wire up the GIS token client. Safe to call repeatedly. */
   init: (clientId: string) => void
@@ -34,10 +27,6 @@ export interface GoogleState {
   /** Revokes the token and clears local session state. */
   signOut: () => void
 
-  /** Pull remote db, merge by revision, push the winner. */
-  syncDrive: (direction?: 'auto' | 'push' | 'pull') => Promise<void>
-  /** Answer a `driveConflict`: keep this device's copy, or take Drive's. */
-  resolveDriveConflict: (choice: 'local' | 'remote') => Promise<void>
   /** Mirror assessments + planned study blocks into Google Calendar. */
   syncCalendar: () => Promise<void>
   /** Read events from every calendar the user owns, for the agenda views. */

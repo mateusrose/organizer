@@ -5,14 +5,18 @@ import { cn } from '../../lib/cn'
 import { useSettings, useStorageError, useStore } from '../../store/useStore'
 import { useGoogle } from '../../store/useGoogle'
 import { SemesterSwitcher } from '../SemesterSwitcher'
+import { useSync } from '../../store/useSync'
 
 export function TopBar() {
   const settings = useSettings()
   const updateSettings = useStore((s) => s.updateSettings)
   const storageError = useStorageError()
+  const syncStatus = useSync((s) => s.status)
+  const pullNow = useSync((s) => s.pull)
+  const syncConfigured = syncStatus !== 'off'
 
   const google = useGoogle()
-  const syncing = google.driveSync.status === 'syncing' || google.calendarSync.status === 'syncing'
+  const syncing = syncStatus === 'syncing' || google.calendarSync.status === 'syncing'
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-bg/70 backdrop-blur-xl">
@@ -35,13 +39,13 @@ export function TopBar() {
           </span>
         )}
 
-        {google.signedIn && (
+        {(syncConfigured || google.signedIn) && (
           <Button
             variant="ghost"
             size="icon-sm"
             title="Sync now"
             onClick={() => {
-              void google.syncDrive()
+              void pullNow()
               if (settings.calendarSyncEnabled) void google.syncCalendar()
             }}
           >

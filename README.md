@@ -4,7 +4,7 @@ A personal study planner for an asynchronous semester: everything you have to ha
 how much it is worth, and when you are actually going to sit down and do it.
 
 It is a static single-page app. There is no backend and no account — the data lives in
-your browser, and optionally in your own Google Drive.
+your browser, and in a private GitHub repository you own.
 
 ## What it does
 
@@ -18,7 +18,7 @@ your browser, and optionally in your own Google Drive.
 - **Calendar** — week and month views of classes, deadlines and study blocks in one place.
 - **Tasks** — quick to-dos, optionally attached to a course or an assessment.
 - **Google sign-in** — optional, and only for the two features below.
-- **Drive sync** — a backup of your data in a private app folder, so you can move between laptop and phone.
+- **Sync** — every change is saved to a private GitHub repo a few seconds later, so laptop and phone stay in step.
 - **Calendar sync** — pushes deadlines and planned study blocks into a Google Calendar.
 - **Dark mode** — dark by default, light theme in Settings.
 
@@ -52,11 +52,11 @@ with no changes.
 
 ## Google setup
 
-Only needed if you want Drive backup or Calendar sync. Everything else works signed out.
+Only needed for Calendar sync. Data sync uses GitHub instead, and everything else works signed out.
 
 1. Go to the [Google Cloud console](https://console.cloud.google.com/) and create a project
    (call it `semestre`, the name does not matter).
-2. In **APIs & Services → Library**, enable the **Google Calendar API** and the **Google Drive API**.
+2. In **APIs & Services → Library**, enable the **Google Calendar API**.
 3. In **APIs & Services → OAuth consent screen**, choose **External**, fill in the app name and your
    email, and under **Test users** add your own Google account. Leave the app in **Testing** mode.
 4. In **APIs & Services → Credentials**, click **Create credentials → OAuth client ID** and choose
@@ -83,13 +83,18 @@ Notes:
 
 - **Your browser.** Everything is stored in `localStorage` under the key `semestre.db.v1`, saved on
   every change.
-- **Google Drive (optional).** If Drive sync is on, a copy is kept as `semestre.json` in the private
-  `appDataFolder`. That folder is invisible in the normal Drive UI and readable only by this app.
+- **A private GitHub repo (optional).** With sync on, `semestre.json` is written to a private
+  repository you create. Every save is a commit, so the repo doubles as a full version history and
+  you can roll back from github.com. A private repo answers 404 to anyone without your token.
+
+  The token is pasted into Settings and stored in that browser only. It is never committed and
+  never travels inside the synced file — a new device would otherwise need the token to fetch the
+  token. Scope it to that one repository with Contents: read and write, and nothing else.
 - **Files.** Settings has **Export** (downloads a JSON snapshot) and **Import** (restores one). Worth
   doing before you try anything drastic.
 
 **Warning:** clearing site data, "clear cookies and site data" for this domain, or using a private
-window will wipe the local copy. If Drive sync is off and you have no export, the data is gone.
+window will wipe the local copy. With sync off and no export, the data is gone.
 Local storage is also per-browser and per-origin — `localhost` and the GitHub Pages site are two
 separate stores.
 

@@ -32,7 +32,6 @@ export const defaultSettings = (): Settings => ({
   weekStartsOn: 1,
   gradeScale: { max: 20, passing: 9.5 },
   calendarSyncEnabled: false,
-  driveSyncEnabled: false,
 })
 
 /** "2026/27 · 1st semester" — derived from the month so it stays sensible. */

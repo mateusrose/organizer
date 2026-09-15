@@ -215,8 +215,6 @@ export interface Settings {
   studyCalendarId?: string
   /** Mirror assessments + study blocks into Google Calendar. */
   calendarSyncEnabled: boolean
-  /** Sync the database to Google Drive appDataFolder. */
-  driveSyncEnabled: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -293,7 +291,7 @@ export interface DatabaseSummary {
  * hold real data. Revision is a per-device edit counter, not a clock, so
  * picking a winner automatically can silently destroy the other copy.
  */
-export interface DriveConflict {
+export interface SyncConflict {
   local: DatabaseSummary
   remote: DatabaseSummary
 }

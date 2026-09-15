@@ -12,7 +12,6 @@ import {
   Download,
   ExternalLink,
   GraduationCap,
-  HardDrive,
   Info,
   KeyRound,
   LogOut,
@@ -44,6 +43,8 @@ import {
 import { useAllSemesters, useDb, useSettings, useStore } from '../store/useStore'
 import { useGoogle } from '../store/useGoogle'
 import { toast } from '../store/useToast'
+import { SyncSetupCard } from '../components/SyncSetupCard'
+import { useSync } from '../store/useSync'
 import { looksLikeBackup } from '../lib/db'
 import { sampleDatabase } from '../lib/sample'
 import { fmtDayMonth, format, relative } from '../lib/date'
@@ -61,7 +62,7 @@ const GOOGLE_PERMISSIONS = [
   { label: 'Basic profile', detail: 'your name, email address and picture' },
 ]
 
-type Dialog = 'restore' | 'import' | 'reset' | 'sample' | null
+type Dialog = 'import' | 'reset' | 'sample' | null
 
 export default function SettingsPage() {
   const settings = useSettings()
@@ -75,11 +76,9 @@ export default function SettingsPage() {
   const profile = useGoogle((s) => s.profile)
   const expiresAt = useGoogle((s) => s.expiresAt)
   const googleError = useGoogle((s) => s.error)
-  const driveSync = useGoogle((s) => s.driveSync)
   const calendarSync = useGoogle((s) => s.calendarSync)
   const signIn = useGoogle((s) => s.signIn)
   const signOut = useGoogle((s) => s.signOut)
-  const syncDrive = useGoogle((s) => s.syncDrive)
   const syncCalendar = useGoogle((s) => s.syncCalendar)
 
   const [dialog, setDialog] = useState<Dialog>(null)
@@ -167,18 +166,6 @@ export default function SettingsPage() {
     signIn().catch(() => undefined)
   }
 
-  const runDrive = async (direction: 'auto' | 'pull') => {
-    try {
-      await syncDrive(direction)
-      const state = useGoogle.getState().driveSync
-      if (state.status === 'error') toast.error(state.message)
-      else if (direction === 'pull') toast.success('Restored the copy from Drive')
-      else toast.success('Synced with Drive')
-    } catch {
-      toast.error('Could not reach Google Drive')
-    }
-  }
-
   const runCalendar = async () => {
     try {
       await syncCalendar()
@@ -231,7 +218,6 @@ export default function SettingsPage() {
     }
   }
 
-  const driveBusy = driveSync.status === 'syncing'
   const calendarBusy = calendarSync.status === 'syncing'
 
   return (
@@ -538,78 +524,45 @@ export default function SettingsPage() {
           </div>
         </Card>
 
-        {/* --- sync -------------------------------------------------------- */}
+        <SyncSetupCard />
+
+        {/* --- calendar ---------------------------------------------------- */}
         <Card>
           <CardHeader
-            icon={<CloudUpload />}
-            title="Sync"
+            icon={<CalendarCheck />}
+            title="Google Calendar"
             subtitle={
               signedIn
-                ? 'Semestre keeps working offline — syncing is just a copy.'
+                ? 'Mirror deadlines and study blocks into your calendar.'
                 : 'Connect your Google account above to turn this on.'
             }
           />
 
-          <div className="space-y-5">
-            <Toggle
-              checked={settings.driveSyncEnabled}
-              disabled={!signedIn}
-              onChange={(driveSyncEnabled) => updateSettings({ driveSyncEnabled })}
-              label="Back up to Google Drive"
-              hint="Keeps an encrypted-at-rest copy of your data in a private app folder in your Google Drive, so you can use this on your phone too. Only this app can read that folder."
-            />
-            <Toggle
-              checked={settings.calendarSyncEnabled}
-              disabled={!signedIn}
-              onChange={(calendarSyncEnabled) => updateSettings({ calendarSyncEnabled })}
-              label="Mirror into Google Calendar"
-              hint="Copies deadlines and study blocks into a dedicated “Semestre · Study plan” calendar, so they show up next to everything else in your day."
-            />
-          </div>
+          <Toggle
+            checked={settings.calendarSyncEnabled}
+            disabled={!signedIn}
+            onChange={(calendarSyncEnabled) => updateSettings({ calendarSyncEnabled })}
+            label="Mirror into Google Calendar"
+            hint="Copies deadlines and study blocks into a dedicated “Semestre · Study plan” calendar, so they show up next to everything else in your day."
+          />
 
           <Divider className="my-5" />
 
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <SyncStatus icon={<HardDrive className="h-4 w-4" />} label="Drive" state={driveSync} />
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  icon={<RefreshCw className="h-3.5 w-3.5" />}
-                  disabled={!signedIn || driveBusy}
-                  loading={driveBusy}
-                  onClick={() => void runDrive('auto')}
-                >
-                  Sync now
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  icon={<Download className="h-3.5 w-3.5" />}
-                  disabled={!signedIn || driveBusy}
-                  onClick={() => setDialog('restore')}
-                >
-                  Restore from Drive
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <SyncStatus
-                icon={<CalendarCheck className="h-4 w-4" />}
-                label="Calendar"
-                state={calendarSync}
-              />
-              <Button
-                size="sm"
-                icon={<CloudUpload className="h-3.5 w-3.5" />}
-                disabled={!signedIn || calendarBusy}
-                loading={calendarBusy}
-                onClick={() => void runCalendar()}
-              >
-                Push to Calendar
-              </Button>
-            </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <SyncStatus
+              icon={<CalendarCheck className="h-4 w-4" />}
+              label="Calendar"
+              state={calendarSync}
+            />
+            <Button
+              size="sm"
+              icon={<CloudUpload className="h-3.5 w-3.5" />}
+              disabled={!signedIn || calendarBusy}
+              loading={calendarBusy}
+              onClick={() => void runCalendar()}
+            >
+              Push to Calendar
+            </Button>
           </div>
         </Card>
 
@@ -766,15 +719,6 @@ export default function SettingsPage() {
       </div>
 
       <ConfirmDialog
-        open={dialog === 'restore'}
-        onClose={() => setDialog(null)}
-        onConfirm={() => void runDrive('pull')}
-        title="Restore from Drive?"
-        message="The copy in your Google Drive replaces everything in this browser. Anything you changed here and did not sync will be lost."
-        confirmLabel="Restore"
-      />
-
-      <ConfirmDialog
         open={dialog === 'import'}
         onClose={() => {
           setDialog(null)
@@ -783,6 +727,8 @@ export default function SettingsPage() {
         onConfirm={() => {
           replaceDatabase(pendingImport)
           setPendingImport(null)
+          // Wholesale replacements bypass commit(), so ask for a backup explicitly.
+          useSync.getState().schedulePush()
           toast.success('Backup imported')
         }}
         title="Import this backup?"
@@ -802,6 +748,7 @@ export default function SettingsPage() {
         onClose={() => setDialog(null)}
         onConfirm={() => {
           resetDatabase()
+          useSync.getState().schedulePush()
           toast.success('Everything deleted')
         }}
         title="Delete everything?"
@@ -814,6 +761,7 @@ export default function SettingsPage() {
         onClose={() => setDialog(null)}
         onConfirm={() => {
           replaceDatabase(sampleDatabase())
+          useSync.getState().schedulePush()
           toast.success('Sample semester loaded')
         }}
         title="Replace everything with sample data?"
