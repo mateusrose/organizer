@@ -1,11 +1,8 @@
 name: Deploy to GitHub Pages
 
 on:
-  # Publishing is on hold while the app is still being built. Add
-  #   push:
-  #     branches: [main]
-  # back here when the site should go live on every push. Until then the
-  # workflow only runs when started by hand from the Actions tab.
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
