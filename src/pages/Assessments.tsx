@@ -17,10 +17,18 @@ import {
   Search,
   Send,
   Trash,
+  Users,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { hasDateRange } from '../types'
-import type { Assessment, AssessmentKind, AssessmentStatus, Course, GradeScale } from '../types'
+import { ASSESSMENT_MODES, ASSESSMENT_MODE_LABEL, hasDateRange } from '../types'
+import type {
+  Assessment,
+  AssessmentKind,
+  AssessmentMode,
+  AssessmentStatus,
+  Course,
+  GradeScale,
+} from '../types'
 import type { NewAssessment } from '../store/useStore'
 import { useSettings, useStore } from '../store/useStore'
 import { useScope } from '../store/scope'
@@ -445,6 +453,11 @@ function AssessmentRow({
                 {a.title}
               </button>
               <Badge icon={<KindIcon className="h-3 w-3" />}>{kind.label}</Badge>
+              {a.mode === 'group' && (
+                <Badge icon={<Users className="h-3 w-3" />}>
+                  {ASSESSMENT_MODE_LABEL.group}
+                </Badge>
+              )}
               {a.url && (
                 <a
                   href={a.url}
@@ -613,6 +626,7 @@ interface FormState {
   courseId: string
   title: string
   kind: AssessmentKind
+  mode: AssessmentMode
   startsAt: string
   dueAt: string
   points: string
@@ -632,6 +646,7 @@ function initialForm(a: Assessment | null, courses: Course[], forceGraded?: bool
       courseId: courses[0]?.id ?? '',
       title: '',
       kind: 'assignment',
+      mode: 'individual',
       startsAt: '',
       dueAt: toDateTimeInput(due.toISOString()),
       points: '',
@@ -646,6 +661,7 @@ function initialForm(a: Assessment | null, courses: Course[], forceGraded?: bool
     courseId: a.courseId,
     title: a.title,
     kind: a.kind,
+    mode: a.mode,
     startsAt: a.startsAt ? toDateTimeInput(a.startsAt) : '',
     dueAt: toDateTimeInput(a.dueAt),
     points: String(a.points),
@@ -739,6 +755,7 @@ function AssessmentModal({
       courseId: form.courseId,
       title: form.title.trim(),
       kind: form.kind,
+      mode: form.mode,
       startsAt:
         hasDateRange(form.kind) && form.startsAt
           ? fromDateTimeInput(form.startsAt)
@@ -786,7 +803,7 @@ function AssessmentModal({
       onClose={onClose}
       title={assessment ? 'Edit assessment' : 'New assessment'}
       subtitle={
-        assessment ? 'Changes apply immediately' : 'Weight and hour estimates drive the planner'
+        assessment ? 'Changes apply immediately' : 'Points and hour estimates drive the planner'
       }
       footer={
         <>
@@ -838,6 +855,17 @@ function AssessmentModal({
           </Select>
         </Field>
 
+        <Field className="sm:col-span-2" label="Worked">
+          <SegmentedControl
+            value={form.mode}
+            onChange={(mode) => set('mode', mode)}
+            options={ASSESSMENT_MODES.map((m) => ({
+              value: m,
+              label: ASSESSMENT_MODE_LABEL[m],
+            }))}
+          />
+        </Field>
+
         <Field
           className="sm:col-span-2"
           label="Title"
@@ -858,7 +886,7 @@ function AssessmentModal({
           <Field
             label="Starts"
             htmlFor={`${fid}-starts`}
-            hint="When the work opens \u00b7 optional"
+            hint="When the work opens · optional"
             error={shown.startsAt}
           >
             <Input

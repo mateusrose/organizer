@@ -134,6 +134,15 @@ export type AssessmentKind =
 
 export type AssessmentStatus = 'todo' | 'in-progress' | 'submitted' | 'graded'
 
+/** Whether the student hands this in alone or with a group. */
+export const ASSESSMENT_MODES = ['individual', 'group'] as const
+export type AssessmentMode = (typeof ASSESSMENT_MODES)[number]
+
+export const ASSESSMENT_MODE_LABEL: Record<AssessmentMode, string> = {
+  individual: 'Individual',
+  group: 'Group',
+}
+
 /**
  * Kinds that run over a stretch of days rather than landing on one. Only these
  * offer a start date; everything else is just its deadline.
@@ -149,6 +158,8 @@ export interface Assessment {
   courseId: string
   title: string
   kind: AssessmentKind
+  /** Worked alone or as a group. Most work is individual, so that is the default. */
+  mode: AssessmentMode
   /**
    * When the work opens, for the kinds that run over days. Undefined means the
    * assessment is only its deadline.

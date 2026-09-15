@@ -75,11 +75,13 @@ export function sampleDatabase(now: Date = new Date()): Database {
     score?: number,
     /** Days before the deadline the work opens, for assignments and projects. */
     opensBefore?: number,
+    mode: Assessment['mode'] = 'individual',
   ): Assessment => ({
     id: uid('ass'),
     courseId: course.id,
     title,
     kind,
+    mode,
     startsAt:
       opensBefore !== undefined && hasDateRange(kind)
         ? day(dueOffset - opensBefore, '09:00')
@@ -108,10 +110,10 @@ export function sampleDatabase(now: Date = new Date()): Database {
 
     // The live pipeline.
     mkAssessment(linear, 'Problem set 2', 'assignment', 3, 3, 6, 'todo', undefined, 10),
-    mkAssessment(programming, 'Project: inventory CLI', 'project', 9, 6, 22, 'in-progress', undefined, 28),
+    mkAssessment(programming, 'Project: inventory CLI', 'project', 9, 6, 22, 'in-progress', undefined, 28, 'group'),
     mkAssessment(calculus, 'Continuous assessment 2', 'quiz', 12, 4, 8),
     mkAssessment(architecture, 'Assembly lab report', 'lab', 16, 4, 9),
-    mkAssessment(english, 'Oral presentation', 'presentation', 21, 5, 6),
+    mkAssessment(english, 'Oral presentation', 'presentation', 21, 5, 6, 'todo', undefined, undefined, 'group'),
 
     // Exams at the end of the semester.
     mkAssessment(calculus, 'Final exam', 'exam', 38, 12, 30),

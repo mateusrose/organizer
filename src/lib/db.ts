@@ -204,6 +204,13 @@ export function migrate(input: unknown): Database {
     if (!c.semesterId || !known.has(c.semesterId)) c.semesterId = activeSemesterId
   }
 
+  // Assessments written before group work existed are individual, which is what
+  // the field defaults to anyway.
+  const assessments = (raw.assessments ?? []).map((a) => ({
+    ...a,
+    mode: a.mode === 'group' ? ('group' as const) : ('individual' as const),
+  }))
+
   // A theme's checklist and resources are collections the UI maps over, so they
   // have to exist even on a payload written before they did.
   themes = themes.map((t) => ({
@@ -238,7 +245,7 @@ export function migrate(input: unknown): Database {
     activeSemesterId,
     courses: courses as Course[],
     themes,
-    assessments: raw.assessments ?? [],
+    assessments,
     classes,
     studyBlocks: raw.studyBlocks ?? [],
     tasks,
