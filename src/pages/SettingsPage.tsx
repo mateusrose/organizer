@@ -25,6 +25,7 @@ import {
   TriangleAlert,
   Upload,
   Layers,
+  Lock,
   Sparkles,
 } from 'lucide-react'
 import {
@@ -61,7 +62,7 @@ const GOOGLE_PERMISSIONS = [
   { label: 'Basic profile', detail: 'your name, email address and picture' },
 ]
 
-type Dialog = 'restore' | 'import' | 'reset' | 'sample' | null
+type Dialog = 'restore' | 'import' | 'reset' | 'sample' | 'owner' | null
 
 export default function SettingsPage() {
   const settings = useSettings()
@@ -538,6 +539,58 @@ export default function SettingsPage() {
           </div>
         </Card>
 
+        {/* --- access ------------------------------------------------------ */}
+        <Card>
+          <CardHeader
+            icon={<Lock />}
+            title="Access"
+            subtitle="Keep the published page tied to one Google account."
+          />
+
+          <div className="flex flex-col gap-4">
+            <Toggle
+              checked={settings.requireSignIn}
+              onChange={(requireSignIn) => updateSettings({ requireSignIn })}
+              label="Require Google sign-in to open this app"
+              hint="Anyone opening the site sees a lock screen until they sign in as the owner."
+            />
+
+            {settings.requireSignIn && !signedIn && (
+              <p className="rounded-xl border border-warning/25 bg-warning-bg px-3 py-2 text-[13px] text-warning">
+                You are not connected. Connect Google above before you rely on this — Settings
+                always stays reachable, so you can switch it back off.
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-2/50 px-3.5 py-3">
+              <div className="min-w-0">
+                <p className="text-[12px] font-medium tracking-wide text-muted uppercase">Owner</p>
+                {settings.ownerEmail ? (
+                  <p className="mt-0.5 truncate text-sm text-ink">{settings.ownerEmail}</p>
+                ) : (
+                  <p className="mt-0.5 text-[13px] text-faint">
+                    Not claimed yet — the next account to sign in becomes the owner.
+                  </p>
+                )}
+              </div>
+              {settings.ownerEmail && (
+                <Button variant="secondary" size="sm" onClick={() => setDialog('owner')}>
+                  Change owner
+                </Button>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-info/25 bg-info-bg px-3.5 py-3">
+              <p className="text-[13px] leading-relaxed text-info">
+                <span className="font-medium">This is a front-door lock, not access control.</span>{' '}
+                The site is a static page, so its code is public and nothing here can be enforced
+                on a server. What actually keeps your work private is that it never leaves this
+                browser and your own Google Drive.
+              </p>
+            </div>
+          </div>
+        </Card>
+
         {/* --- sync -------------------------------------------------------- */}
         <Card>
           <CardHeader
@@ -807,6 +860,19 @@ export default function SettingsPage() {
         title="Delete everything?"
         message="Every course, assessment, class, study block and task goes away. This cannot be undone."
         confirmLabel="Delete everything"
+      />
+
+      <ConfirmDialog
+        open={dialog === 'owner'}
+        onClose={() => setDialog(null)}
+        onConfirm={() => {
+          updateSettings({ ownerEmail: undefined })
+          toast.success('Owner cleared — the next account to sign in claims it')
+        }}
+        destructive={false}
+        title="Release this planner?"
+        message="The next Google account to sign in becomes the owner. Use this if you are moving to a different account."
+        confirmLabel="Release"
       />
 
       <ConfirmDialog

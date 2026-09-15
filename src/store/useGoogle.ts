@@ -302,8 +302,24 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
     try {
       const { accessToken, expiresAt } = await requestTokenAsync(true)
       const profile = await fetchUserInfo(accessToken)
+
+      // The first account to sign in claims the planner; after that only that
+      // account gets in. Purely a front-door lock — see SignInGate.
+      const owner = useStore.getState().db.settings.ownerEmail
+      if (owner && profile.email.trim().toLowerCase() !== owner.trim().toLowerCase()) {
+        revoke(accessToken)
+        clearSession()
+        const message = `This planner is private to ${owner}.`
+        set({ signedIn: false, profile: null, accessToken: null, expiresAt: null, connecting: false, error: message })
+        toast.error(message)
+        return
+      }
+
       saveSession({ accessToken, expiresAt, profile })
       set({ signedIn: true, profile, accessToken, expiresAt, connecting: false, error: null })
+      if (!owner && profile.email) {
+        useStore.getState().updateSettings({ ownerEmail: profile.email })
+      }
       toast.success(`Connected as ${profile.email || profile.name}`)
 
       if (useStore.getState().db.settings.driveSyncEnabled) {

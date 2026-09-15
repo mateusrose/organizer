@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { BookOpen, GraduationCap, Plus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Assessment, Course, Theme } from '../types'
@@ -215,7 +215,11 @@ function Timeline({
   const days = Math.max(1, Math.round((end - start) / DAY) + 1)
   const width = days * MIN_PX_PER_DAY
 
-  const x = (ms: number) => ((ms - start) / DAY) * MIN_PX_PER_DAY
+  /** Pixels from the left edge of the track for a given instant. */
+  const x = useCallback(
+    (ms: number) => ((ms - start) / DAY) * MIN_PX_PER_DAY,
+    [start],
+  )
 
   /** Month boundaries inside the range, for the ruler along the top. */
   const months = useMemo(() => {
@@ -228,7 +232,7 @@ function Timeline({
       cursor.setMonth(cursor.getMonth() + 1)
     }
     return out
-  }, [start, end])
+  }, [start, end, x])
 
   const todayLeft = now.getTime() >= start && now.getTime() <= end + DAY ? x(now.getTime()) : null
 
