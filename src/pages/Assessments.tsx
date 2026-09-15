@@ -101,17 +101,6 @@ type SortKey = 'urgency' | 'due' | 'weight' | 'course'
 
 const kindMeta = (kind: AssessmentKind) => KINDS.find((k) => k.value === kind) ?? KINDS[0]
 
-/**
- * Browsers fill the time half of a `datetime-local` with the current clock the
- * moment a date is picked, so a window opened at 17:42 only because that is when
- * the form was filled in. The first pick means "this day", so it lands on 00:00;
- * once the field holds a value the time is the student's to set.
- */
-function openingTime(next: string, previous: string): string {
-  if (!next || previous) return next
-  return `${next.split('T')[0]}T00:00`
-}
-
 function ModeIcon({ mode }: { mode: AssessmentMode }) {
   const Icon = mode === 'wiseflow' ? MonitorCheck : Users
   return <Icon className="h-3 w-3" />
@@ -659,12 +648,16 @@ function initialForm(a: Assessment | null, courses: Course[], forceGraded?: bool
     const due = new Date()
     due.setDate(due.getDate() + 7)
     due.setHours(23, 59, 0, 0)
+    // The work opens today, at the start of the day — the mirror of the deadline
+    // sitting at the end of its own.
+    const starts = new Date()
+    starts.setHours(0, 0, 0, 0)
     return {
       courseId: courses[0]?.id ?? '',
       title: '',
       kind: 'assignment',
       mode: 'individual',
-      startsAt: '',
+      startsAt: toDateTimeInput(starts.toISOString()),
       dueAt: toDateTimeInput(due.toISOString()),
       points: '',
       estimatedHours: '4',
@@ -910,7 +903,7 @@ function AssessmentModal({
               id={`${fid}-starts`}
               type="datetime-local"
               value={form.startsAt}
-              onChange={(e) => set('startsAt', openingTime(e.target.value, form.startsAt))}
+              onChange={(e) => set('startsAt', e.target.value)}
             />
           </Field>
         )}
