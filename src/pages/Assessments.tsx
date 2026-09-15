@@ -63,8 +63,6 @@ import {
   fmtWeekday,
   fromDateTimeInput,
   toDate,
-  fromDateInput,
-  toDateInput,
   toDateTimeInput,
 } from '../lib/date'
 
@@ -102,6 +100,17 @@ type StatusFilter = 'open' | 'submitted' | 'graded' | 'all'
 type SortKey = 'urgency' | 'due' | 'weight' | 'course'
 
 const kindMeta = (kind: AssessmentKind) => KINDS.find((k) => k.value === kind) ?? KINDS[0]
+
+/**
+ * Browsers fill the time half of a `datetime-local` with the current clock the
+ * moment a date is picked, so a window opened at 17:42 only because that is when
+ * the form was filled in. The first pick means "this day", so it lands on 00:00;
+ * once the field holds a value the time is the student's to set.
+ */
+function openingTime(next: string, previous: string): string {
+  if (!next || previous) return next
+  return `${next.split('T')[0]}T00:00`
+}
 
 function ModeIcon({ mode }: { mode: AssessmentMode }) {
   const Icon = mode === 'wiseflow' ? MonitorCheck : Users
@@ -670,7 +679,7 @@ function initialForm(a: Assessment | null, courses: Course[], forceGraded?: bool
     title: a.title,
     kind: a.kind,
     mode: a.mode,
-    startsAt: a.startsAt ? toDateInput(a.startsAt) : '',
+    startsAt: a.startsAt ? toDateTimeInput(a.startsAt) : '',
     dueAt: toDateTimeInput(a.dueAt),
     points: String(a.points),
     estimatedHours: String(a.estimatedHours),
@@ -716,7 +725,7 @@ function AssessmentModal({
     if (!form.courseId) e.courseId = 'Pick a course'
     if (!form.title.trim()) e.title = 'Give this assessment a title'
     if (!form.dueAt) e.dueAt = 'Set a due date and time'
-    if (form.startsAt && form.dueAt && form.startsAt > form.dueAt.slice(0, 10))
+    if (form.startsAt && form.dueAt && form.startsAt > form.dueAt)
       e.startsAt = 'The work cannot start after it is due'
     const points = Number(form.points)
     if (form.points !== '' && (!Number.isFinite(points) || points < 0 || points > scale.max)) {
@@ -766,7 +775,7 @@ function AssessmentModal({
       mode: form.mode,
       startsAt:
         hasDateRange(form.kind) && form.startsAt
-          ? fromDateInput(form.startsAt)
+          ? fromDateTimeInput(form.startsAt)
           : undefined,
       dueAt: fromDateTimeInput(form.dueAt),
       points: Math.min(scale.max, Math.max(0, Number(form.points || 0))),
@@ -899,9 +908,9 @@ function AssessmentModal({
           >
             <Input
               id={`${fid}-starts`}
-              type="date"
+              type="datetime-local"
               value={form.startsAt}
-              onChange={(e) => set('startsAt', e.target.value)}
+              onChange={(e) => set('startsAt', openingTime(e.target.value, form.startsAt))}
             />
           </Field>
         )}
