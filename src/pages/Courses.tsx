@@ -16,7 +16,7 @@ import {
   Target,
   Trash2,
 } from 'lucide-react'
-import { COURSE_COLORS } from '../types'
+import { COURSE_COLORS, INSTRUCTOR_ROLES, INSTRUCTOR_ROLE_LABEL } from '../types'
 import type {
   Assessment,
   ClassEntry,
@@ -24,6 +24,8 @@ import type {
   Course,
   CourseColor,
   GradeScale,
+  Instructor,
+  InstructorRole,
   Semester,
   Theme,
   Weekday,
@@ -326,9 +328,12 @@ function CourseCard({
   const progress = themeProgress(themes)
   const behindCount = themes.filter((t) => isBehind(t)).length
 
+  // Docentes read as plain names; tutors are tagged so the two never blur.
   const meta = [
     `${trim(course.ects)} ECTS`,
-    course.instructor,
+    ...course.instructors.map((i) =>
+      i.role === 'docente' ? i.name : `${i.name} · ${INSTRUCTOR_ROLE_LABEL[i.role]}`,
+    ),
   ].filter(Boolean) as string[]
 
   const target = course.targetGrade
@@ -553,12 +558,15 @@ function CourseCard({
 // course form
 // ---------------------------------------------------------------------------
 
+const emptyInstructor = (): Instructor => ({ name: '', role: 'docente' })
+
 interface CourseForm {
   name: string
   code: string
   color: CourseColor
   ects: string
-  instructor: string
+  /** Always holds at least one row, so the form opens with one empty name. */
+  instructors: Instructor[]
   url: string
   targetGrade: string
   notes: string
@@ -585,7 +593,7 @@ function CourseFormModal({
         code: course.code,
         color: course.color,
         ects: String(course.ects),
-        instructor: course.instructor ?? '',
+        instructors: course.instructors.length > 0 ? [...course.instructors] : [emptyInstructor()],
         url: course.url ?? '',
         targetGrade: course.targetGrade == null ? '' : String(course.targetGrade),
         notes: course.notes ?? '',
@@ -597,7 +605,7 @@ function CourseFormModal({
       code: '',
       color: COURSE_COLORS.find((c) => !used.has(c)) ?? COURSE_COLORS[courses.length % COURSE_COLORS.length],
       ects: '6',
-      instructor: '',
+      instructors: [emptyInstructor()],
       url: '',
       targetGrade: '',
       notes: '',
@@ -606,6 +614,21 @@ function CourseFormModal({
   const [errors, setErrors] = useState<Partial<Record<keyof CourseForm, string>>>({})
 
   const set = (patch: Partial<CourseForm>) => setForm((prev) => ({ ...prev, ...patch }))
+
+  const setInstructor = (index: number, patch: Partial<Instructor>) =>
+    setForm((prev) => ({
+      ...prev,
+      instructors: prev.instructors.map((it, i) => (i === index ? { ...it, ...patch } : it)),
+    }))
+
+  const addInstructor = () =>
+    setForm((prev) => ({ ...prev, instructors: [...prev.instructors, emptyInstructor()] }))
+
+  const removeInstructor = (index: number) =>
+    setForm((prev) => {
+      const next = prev.instructors.filter((_, i) => i !== index)
+      return { ...prev, instructors: next.length > 0 ? next : [emptyInstructor()] }
+    })
 
   const save = () => {
     const next: Partial<Record<keyof CourseForm, string>> = {}
@@ -628,7 +651,9 @@ function CourseFormModal({
       code: form.code.trim(),
       color: form.color,
       ects,
-      instructor: form.instructor.trim() || undefined,
+      instructors: form.instructors
+        .map((i) => ({ ...i, name: i.name.trim() }))
+        .filter((i) => i.name),
       url: form.url.trim() || undefined,
       targetGrade: target,
       notes: form.notes.trim() || undefined,
@@ -693,17 +718,6 @@ function CourseFormModal({
               onChange={(e) => set({ ects: e.target.value })}
             />
           </Field>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Instructor" htmlFor="course-instructor">
-            <Input
-              id="course-instructor"
-              value={form.instructor}
-              placeholder="Prof. Ana Silva"
-              onChange={(e) => set({ instructor: e.target.value })}
-            />
-          </Field>
           <Field
             label="Target grade"
             error={errors.targetGrade}
@@ -722,6 +736,54 @@ function CourseFormModal({
             />
           </Field>
         </div>
+
+        <Field label="Teaching staff" hint="Blank rows are dropped on save">
+          <div className="flex flex-col gap-2">
+            {form.instructors.map((instructor, i) => (
+              // Rows have no stable id, so the index is the only usable key.
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  value={instructor.name}
+                  aria-label={`Instructor ${i + 1} name`}
+                  placeholder="Prof. Ana Silva"
+                  className="min-w-0 flex-1"
+                  onChange={(e) => setInstructor(i, { name: e.target.value })}
+                />
+                <div className="w-32 shrink-0">
+                  <Select
+                    value={instructor.role}
+                    aria-label={`Instructor ${i + 1} role`}
+                    onChange={(e) => setInstructor(i, { role: e.target.value as InstructorRole })}
+                  >
+                    {INSTRUCTOR_ROLES.map((role) => (
+                      <option key={role} value={role}>
+                        {INSTRUCTOR_ROLE_LABEL[role]}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Remove instructor ${i + 1}`}
+                  // The last row stays so the field never collapses to nothing.
+                  disabled={form.instructors.length === 1}
+                  icon={<Trash2 className="h-4 w-4" />}
+                  onClick={() => removeInstructor(i)}
+                />
+              </div>
+            ))}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              icon={<Plus className="h-4 w-4" />}
+              onClick={addInstructor}
+            >
+              Add instructor
+            </Button>
+          </div>
+        </Field>
 
         <Field label="Course page" htmlFor="course-url" hint="Moodle, Canvas or the course site">
           <Input

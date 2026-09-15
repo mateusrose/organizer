@@ -7,6 +7,7 @@ import type {
   Course,
   CourseColor,
   Database,
+  Instructor,
   Task,
   Theme,
   Weekday,
@@ -36,7 +37,7 @@ export function sampleDatabase(now: Date = new Date()): Database {
     code: string,
     color: CourseColor,
     ects: number,
-    instructor: string,
+    instructors: Instructor[],
     targetGrade?: number,
   ): Course => ({
     id: uid('crs'),
@@ -45,18 +46,18 @@ export function sampleDatabase(now: Date = new Date()): Database {
     color,
     ects,
     semesterId: semester.id,
-    instructor,
+    instructors,
     targetGrade,
     archived: false,
     createdAt: stamp,
     updatedAt: stamp,
   })
 
-  const calculus = mkCourse('Calculus I', 'MAT101', 'violet', 6, 'Prof. Almeida', 15)
-  const programming = mkCourse('Imperative Programming', 'PRG102', 'emerald', 6, 'Prof. Nunes', 17)
-  const linear = mkCourse('Linear Algebra', 'ALG103', 'sky', 6, 'Prof. Cardoso')
-  const architecture = mkCourse('Computer Architecture', 'ARQ104', 'amber', 6, 'Prof. Reis', 14)
-  const english = mkCourse('Technical English', 'ING105', 'rose', 3, 'Prof. Santos')
+  const calculus = mkCourse('Calculus I', 'MAT101', 'violet', 6, [{ name: 'Prof. Almeida', role: 'docente' }], 15)
+  const programming = mkCourse('Imperative Programming', 'PRG102', 'emerald', 6, [{ name: 'Prof. Nunes', role: 'docente' }, { name: 'Eng. Vieira', role: 'tutor' }], 17)
+  const linear = mkCourse('Linear Algebra', 'ALG103', 'sky', 6, [{ name: 'Prof. Cardoso', role: 'docente' }])
+  const architecture = mkCourse('Computer Architecture', 'ARQ104', 'amber', 6, [{ name: 'Prof. Reis', role: 'docente' }, { name: 'Prof. Matos', role: 'docente' }], 14)
+  const english = mkCourse('Technical English', 'ING105', 'rose', 3, [{ name: 'Prof. Santos', role: 'docente' }])
 
   db.courses = [calculus, programming, linear, architecture, english]
 

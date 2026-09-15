@@ -3,6 +3,7 @@ import type {
   ClassEntry,
   Course,
   Database,
+  Instructor,
   Semester,
   Settings,
   StudyPreferences,
@@ -84,10 +85,15 @@ export const emptyDatabase = (): Database => {
   }
 }
 
-/** v1 shape: courses carried a free-text `term` and syllabus units were classes. */
-interface LegacyCourse extends Omit<Course, 'semesterId'> {
+/**
+ * v1 shape: courses carried a free-text `term` and syllabus units were classes.
+ * v2 shape: a course had at most one `instructor`.
+ */
+interface LegacyCourse extends Omit<Course, 'semesterId' | 'instructors'> {
   term?: string
   semesterId?: string
+  instructor?: string
+  instructors?: (Instructor | string)[]
 }
 
 /**
@@ -195,6 +201,24 @@ export function migrate(input: unknown): Database {
   const known = new Set(semesters.map((s) => s.id))
   for (const c of courses) {
     if (!c.semesterId || !known.has(c.semesterId)) c.semesterId = activeSemesterId
+  }
+
+  // --- v2 → v3: several people teach a course, each with a role -------------
+  for (const c of courses) {
+    const legacy = Array.isArray(c.instructors)
+      ? c.instructors
+      : c.instructor
+        ? [c.instructor]
+        : []
+    // A lone pre-v3 name was always the course's main teacher.
+    c.instructors = legacy
+      .map((entry) =>
+        typeof entry === 'string'
+          ? { name: entry.trim(), role: 'docente' as const }
+          : { name: entry.name.trim(), role: entry.role },
+      )
+      .filter((i) => i.name)
+    delete c.instructor
   }
 
   return {

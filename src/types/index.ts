@@ -32,6 +32,20 @@ export interface Semester {
   updatedAt: ISODate
 }
 
+export const INSTRUCTOR_ROLES = ['docente', 'tutor'] as const
+export type InstructorRole = (typeof INSTRUCTOR_ROLES)[number]
+
+export const INSTRUCTOR_ROLE_LABEL: Record<InstructorRole, string> = {
+  docente: 'Docente',
+  tutor: 'Tutor',
+}
+
+/** One member of a course's teaching staff. */
+export interface Instructor {
+  name: string
+  role: InstructorRole
+}
+
 export interface Course {
   id: string
   name: string
@@ -40,7 +54,8 @@ export interface Course {
   ects: number
   /** Owning semester. Everything in the app is scoped through this. */
   semesterId: string
-  instructor?: string
+  /** Teaching staff, in the order the student wants to see them. */
+  instructors: Instructor[]
   /** Target final grade on the configured scale. */
   targetGrade?: number
   /** Course homepage / Moodle link. */
@@ -221,7 +236,7 @@ export interface Settings {
 // Persisted database
 // ---------------------------------------------------------------------------
 
-export const DB_VERSION = 2
+export const DB_VERSION = 3
 
 /** A calendar event this app wrote that still needs deleting remotely. */
 export interface PendingEventDeletion {
