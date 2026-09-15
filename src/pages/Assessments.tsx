@@ -19,6 +19,7 @@ import {
   Trash,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { hasDateRange } from '../types'
 import type { Assessment, AssessmentKind, AssessmentStatus, Course, GradeScale } from '../types'
 import type { NewAssessment } from '../store/useStore'
 import { useSettings, useStore } from '../store/useStore'
@@ -398,7 +399,9 @@ function AssessmentRow({
   const done = isDone(a)
 
   const meta = [
-    `Due ${fmtWeekday(a.dueAt)} ${fmtDayMonth(a.dueAt)}`,
+    a.startsAt
+      ? `${fmtDayMonth(a.startsAt)} \u2192 ${fmtWeekday(a.dueAt)} ${fmtDayMonth(a.dueAt)}`
+      : `Due ${fmtWeekday(a.dueAt)} ${fmtDayMonth(a.dueAt)}`,
     fmtTime(a.dueAt),
     `${num(a.points)} pts of grade`,
     `${num(a.estimatedHours)} h estimated`,
@@ -610,6 +613,7 @@ interface FormState {
   courseId: string
   title: string
   kind: AssessmentKind
+  startsAt: string
   dueAt: string
   points: string
   estimatedHours: string
@@ -628,6 +632,7 @@ function initialForm(a: Assessment | null, courses: Course[], forceGraded?: bool
       courseId: courses[0]?.id ?? '',
       title: '',
       kind: 'assignment',
+      startsAt: '',
       dueAt: toDateTimeInput(due.toISOString()),
       points: '',
       estimatedHours: '4',
@@ -641,6 +646,7 @@ function initialForm(a: Assessment | null, courses: Course[], forceGraded?: bool
     courseId: a.courseId,
     title: a.title,
     kind: a.kind,
+    startsAt: a.startsAt ? toDateTimeInput(a.startsAt) : '',
     dueAt: toDateTimeInput(a.dueAt),
     points: String(a.points),
     estimatedHours: String(a.estimatedHours),
@@ -676,11 +682,18 @@ function AssessmentModal({
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }) as FormState)
 
+  // Only assignments and projects run over days. Switching to any other kind
+  // drops the start rather than leaving it set but invisible.
+  const setKind = (kind: AssessmentKind) =>
+    setForm((f) => ({ ...f, kind, startsAt: hasDateRange(kind) ? f.startsAt : '' }))
+
   const errors = useMemo(() => {
     const e: Partial<Record<keyof FormState, string>> = {}
     if (!form.courseId) e.courseId = 'Pick a course'
     if (!form.title.trim()) e.title = 'Give this assessment a title'
     if (!form.dueAt) e.dueAt = 'Set a due date and time'
+    if (form.startsAt && form.dueAt && form.startsAt > form.dueAt)
+      e.startsAt = 'The work cannot start after it is due'
     const points = Number(form.points)
     if (form.points !== '' && (!Number.isFinite(points) || points < 0 || points > scale.max)) {
       e.points = `Points must be between 0 and ${num(scale.max)}`
@@ -726,6 +739,10 @@ function AssessmentModal({
       courseId: form.courseId,
       title: form.title.trim(),
       kind: form.kind,
+      startsAt:
+        hasDateRange(form.kind) && form.startsAt
+          ? fromDateTimeInput(form.startsAt)
+          : undefined,
       dueAt: fromDateTimeInput(form.dueAt),
       points: Math.min(scale.max, Math.max(0, Number(form.points || 0))),
       estimatedHours: Math.max(0, Number(form.estimatedHours || 0)),
@@ -811,7 +828,7 @@ function AssessmentModal({
           <Select
             id={`${fid}-kind`}
             value={form.kind}
-            onChange={(e) => set('kind', e.target.value as AssessmentKind)}
+            onChange={(e) => setKind(e.target.value as AssessmentKind)}
           >
             {KINDS.map((k) => (
               <option key={k.value} value={k.value}>
@@ -836,6 +853,22 @@ function AssessmentModal({
             autoFocus
           />
         </Field>
+
+        {hasDateRange(form.kind) && (
+          <Field
+            label="Starts"
+            htmlFor={`${fid}-starts`}
+            hint="When the work opens \u00b7 optional"
+            error={shown.startsAt}
+          >
+            <Input
+              id={`${fid}-starts`}
+              type="datetime-local"
+              value={form.startsAt}
+              onChange={(e) => set('startsAt', e.target.value)}
+            />
+          </Field>
+        )}
 
         <Field label="Due" required htmlFor={`${fid}-due`} error={shown.dueAt}>
           <Input

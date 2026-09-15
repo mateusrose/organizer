@@ -1233,16 +1233,6 @@ const THEME_STATUSES: { value: Theme['status']; label: string }[] = [
   { value: 'done', label: THEME_STATUS_LABEL.done },
 ]
 
-/** Strips "1.", "2)", "-", "*", "Unit 3 —" and friends off a pasted line. */
-function cleanThemeLine(line: string): string {
-  return line
-    .trim()
-    .replace(/^[-*•]\s+/, '')
-    .replace(/^\d+\s*[.)\]]\s*/, '')
-    .replace(/^(unit|tema|módulo|modulo|module|chapter|cap[íi]tulo)\s+\d+\s*[-–—:.]\s*/i, '')
-    .trim()
-}
-
 function ThemesModal({
   course,
   semester,
@@ -1253,7 +1243,6 @@ function ThemesModal({
   onClose: () => void
 }) {
   const themes = useScope().themes
-  const addTheme = useStore((s) => s.addTheme)
   const updateTheme = useStore((s) => s.updateTheme)
   const deleteTheme = useStore((s) => s.deleteTheme)
   const spreadThemes = useStore((s) => s.spreadThemes)
@@ -1264,38 +1253,13 @@ function ThemesModal({
     [themes, course.id],
   )
 
-  const [bulk, setBulk] = useState('')
-  const [showBulk, setShowBulk] = useState(false)
   const [spreadFrom, setSpreadFrom] = useState(() =>
     semester ? toDateInput(semester.startsOn) : '',
   )
   const [spreadTo, setSpreadTo] = useState(() => (semester ? toDateInput(semester.endsOn) : ''))
   const [confirmSpread, setConfirmSpread] = useState(false)
 
-  const pending = useMemo(
-    () => bulk.split('\n').map(cleanThemeLine).filter(Boolean),
-    [bulk],
-  )
   const progress = themeProgress(mine)
-
-  const addAll = () => {
-    if (pending.length === 0) return
-    // New themes land on the day the syllabus starts; "Spread evenly" is what
-    // turns them into real bands.
-    const anchor = semester?.startsOn ?? new Date().toISOString()
-    pending.forEach((title, i) =>
-      addTheme({
-        courseId: course.id,
-        title,
-        order: mine.length + i,
-        startsOn: anchor,
-        endsOn: anchor,
-      }),
-    )
-    setBulk('')
-    setShowBulk(false)
-    toast.success(`${pending.length} ${pending.length === 1 ? 'theme' : 'themes'} added`)
-  }
 
   const move = (index: number, delta: number) => {
     const next = [...mine]
@@ -1321,7 +1285,7 @@ function ThemesModal({
         onClose={onClose}
         size="lg"
         title={`Syllabus · ${course.code}`}
-        subtitle="The topics this course teaches, laid out across the term."
+        subtitle="Order these topics and lay them across the term. New ones are added on the Syllabus page."
         footer={
           <Button variant="secondary" onClick={onClose}>
             Done
@@ -1368,12 +1332,7 @@ function ThemesModal({
             <EmptyState
               icon={<BookOpen />}
               title="No themes yet"
-              message="Add the topics this course covers — paste them all in one go, then spread them across the term."
-              action={
-                <Button variant="primary" onClick={() => setShowBulk(true)}>
-                  Paste the syllabus
-                </Button>
-              }
+              message="Themes are created on the Syllabus page, where each one gets its checklist and resources. Come back here to order them and spread them across the term."
             />
           ) : (
             <>
@@ -1406,62 +1365,6 @@ function ThemesModal({
             </>
           )}
 
-          {/* --- bulk add -------------------------------------------------- */}
-          {showBulk ? (
-            <div className="rounded-xl border border-line bg-surface-2/50 p-3.5">
-              <Field
-                label="One theme per line"
-                htmlFor="bulk-themes"
-                hint="Numbering and bullets are stripped automatically."
-              >
-                <Textarea
-                  id="bulk-themes"
-                  rows={6}
-                  autoFocus
-                  value={bulk}
-                  placeholder={'1. Limits and continuity\n2. Derivatives\n3. Integration techniques'}
-                  onChange={(e) => setBulk(e.target.value)}
-                />
-              </Field>
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <p className="text-[12px] text-faint">
-                  {pending.length === 0
-                    ? 'Nothing to add yet'
-                    : `${pending.length} ${pending.length === 1 ? 'theme' : 'themes'} will be added`}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setShowBulk(false)
-                      setBulk('')
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={pending.length === 0}
-                    onClick={addAll}
-                  >
-                    Add all
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            mine.length > 0 && (
-              <Button
-                variant="secondary"
-                icon={<Plus className="h-4 w-4" />}
-                onClick={() => setShowBulk(true)}
-              >
-                Add themes
-              </Button>
-            )
-          )}
         </div>
       </Modal>
 
@@ -1538,22 +1441,24 @@ function ThemeRow({
         </div>
       </div>
 
+      {/* `cn` is plain clsx, so `w-auto` would not beat the control's own
+          `w-full` — the grid sizes the two dates instead. */}
       <div className="flex flex-wrap items-center gap-2 pl-7">
-        <Input
-          aria-label="Starts on"
-          type="date"
-          className="w-auto"
-          value={toDateInput(theme.startsOn)}
-          onChange={(e) => e.target.value && onPatch({ startsOn: fromDateTimeInput(e.target.value) })}
-        />
-        <span className="text-[12px] text-faint">→</span>
-        <Input
-          aria-label="Ends on"
-          type="date"
-          className="w-auto"
-          value={toDateInput(theme.endsOn)}
-          onChange={(e) => e.target.value && onPatch({ endsOn: fromDateTimeInput(e.target.value) })}
-        />
+        <div className="grid min-w-0 flex-1 grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <Input
+            aria-label="Starts on"
+            type="date"
+            value={toDateInput(theme.startsOn)}
+            onChange={(e) => e.target.value && onPatch({ startsOn: fromDateTimeInput(e.target.value) })}
+          />
+          <span className="text-[12px] text-faint">→</span>
+          <Input
+            aria-label="Ends on"
+            type="date"
+            value={toDateInput(theme.endsOn)}
+            onChange={(e) => e.target.value && onPatch({ endsOn: fromDateTimeInput(e.target.value) })}
+          />
+        </div>
         {behind && <Badge tone="danger">behind</Badge>}
         <SegmentedControl
           size="sm"

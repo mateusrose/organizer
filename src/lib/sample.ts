@@ -1,6 +1,7 @@
 import { addDays, atTime, startOfDay, toISO } from './date'
 import { createSemester, emptyDatabase, spreadDateRange } from './db'
 import { uid } from './id'
+import { hasDateRange } from '../types'
 import type {
   Assessment,
   ClassEntry,
@@ -72,11 +73,17 @@ export function sampleDatabase(now: Date = new Date()): Database {
     estimatedHours: number,
     status: Assessment['status'] = 'todo',
     score?: number,
+    /** Days before the deadline the work opens, for assignments and projects. */
+    opensBefore?: number,
   ): Assessment => ({
     id: uid('ass'),
     courseId: course.id,
     title,
     kind,
+    startsAt:
+      opensBefore !== undefined && hasDateRange(kind)
+        ? day(dueOffset - opensBefore, '09:00')
+        : undefined,
     dueAt: day(dueOffset, kind === 'exam' ? '14:00' : '23:59'),
     points,
     estimatedHours,
@@ -93,15 +100,15 @@ export function sampleDatabase(now: Date = new Date()): Database {
     // Already graded — gives the projection something to work with.
     mkAssessment(calculus, 'Continuous assessment 1', 'quiz', -24, 4, 6, 'graded', 68),
     mkAssessment(programming, 'Lab series 1–3', 'lab', -18, 4, 10, 'graded', 85),
-    mkAssessment(linear, 'Problem set 1', 'assignment', -11, 2, 5, 'graded', 55),
+    mkAssessment(linear, 'Problem set 1', 'assignment', -11, 2, 5, 'graded', 55, 9),
     mkAssessment(architecture, 'Quiz 1', 'quiz', -9, 2, 4, 'graded', 75),
 
     // Overdue — the dashboard should shout about this one.
     mkAssessment(english, 'Reading report: technical writing', 'reading', -2, 3, 3),
 
     // The live pipeline.
-    mkAssessment(linear, 'Problem set 2', 'assignment', 3, 3, 6),
-    mkAssessment(programming, 'Project: inventory CLI', 'project', 9, 6, 22, 'in-progress'),
+    mkAssessment(linear, 'Problem set 2', 'assignment', 3, 3, 6, 'todo', undefined, 10),
+    mkAssessment(programming, 'Project: inventory CLI', 'project', 9, 6, 22, 'in-progress', undefined, 28),
     mkAssessment(calculus, 'Continuous assessment 2', 'quiz', 12, 4, 8),
     mkAssessment(architecture, 'Assembly lab report', 'lab', 16, 4, 9),
     mkAssessment(english, 'Oral presentation', 'presentation', 21, 5, 6),

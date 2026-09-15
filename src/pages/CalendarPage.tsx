@@ -200,7 +200,11 @@ export default function CalendarPage() {
         color: colorOf(a.courseId),
         href: '/assessments',
         done: a.status === 'submitted' || a.status === 'graded',
-        detail: `${Math.round(a.points)} pts of final grade`,
+        // The calendar marks the deadline; a ranged assessment says when the
+        // work opened in its detail rather than becoming a second band.
+        detail: a.startsAt
+          ? `${Math.round(a.points)} pts · open since ${fmtDayMonth(a.startsAt)}`
+          : `${Math.round(a.points)} pts of final grade`,
         point: true,
       })
     }

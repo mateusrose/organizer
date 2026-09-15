@@ -134,11 +134,26 @@ export type AssessmentKind =
 
 export type AssessmentStatus = 'todo' | 'in-progress' | 'submitted' | 'graded'
 
+/**
+ * Kinds that run over a stretch of days rather than landing on one. Only these
+ * offer a start date; everything else is just its deadline.
+ */
+export const RANGED_ASSESSMENT_KINDS = ['assignment', 'project'] as const
+
+export function hasDateRange(kind: AssessmentKind): boolean {
+  return (RANGED_ASSESSMENT_KINDS as readonly AssessmentKind[]).includes(kind)
+}
+
 export interface Assessment {
   id: string
   courseId: string
   title: string
   kind: AssessmentKind
+  /**
+   * When the work opens, for the kinds that run over days. Undefined means the
+   * assessment is only its deadline.
+   */
+  startsAt?: ISODate
   dueAt: ISODate
   /**
    * Share of the final course grade, in points on the course scale — a course
