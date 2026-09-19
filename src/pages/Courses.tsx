@@ -16,7 +16,13 @@ import {
   Target,
   Trash2,
 } from 'lucide-react'
-import { COURSE_COLORS, INSTRUCTOR_ROLES, INSTRUCTOR_ROLE_LABEL } from '../types'
+import {
+  COURSE_COLORS,
+  INSTRUCTOR_ROLES,
+  INSTRUCTOR_ROLE_LABEL,
+  RESOURCE_KINDS,
+  RESOURCE_KIND_LABEL,
+} from '../types'
 import type {
   Assessment,
   ClassEntry,
@@ -26,6 +32,8 @@ import type {
   GradeScale,
   Instructor,
   InstructorRole,
+  LearningResource,
+  ResourceKind,
   Semester,
   Theme,
   Weekday,
@@ -53,6 +61,7 @@ import {
   Textarea,
 } from '../components/ui'
 import { cn } from '../lib/cn'
+import { uid } from '../lib/id'
 import {
   WEEKDAY_LONG,
   daysUntil,
@@ -567,6 +576,8 @@ interface CourseForm {
   ects: string
   /** Always holds at least one row, so the form opens with one empty name. */
   instructors: Instructor[]
+  /** What this course asks you to read or watch. Themes point at these. */
+  resources: LearningResource[]
   url: string
   targetGrade: string
   notes: string
@@ -594,6 +605,7 @@ function CourseFormModal({
         color: course.color,
         ects: String(course.ects),
         instructors: course.instructors.length > 0 ? [...course.instructors] : [emptyInstructor()],
+        resources: [...course.resources],
         url: course.url ?? '',
         targetGrade: course.targetGrade == null ? '' : String(course.targetGrade),
         notes: course.notes ?? '',
@@ -606,6 +618,7 @@ function CourseFormModal({
       color: COURSE_COLORS.find((c) => !used.has(c)) ?? COURSE_COLORS[courses.length % COURSE_COLORS.length],
       ects: '6',
       instructors: [emptyInstructor()],
+      resources: [],
       url: '',
       targetGrade: '',
       notes: '',
@@ -623,6 +636,22 @@ function CourseFormModal({
 
   const addInstructor = () =>
     setForm((prev) => ({ ...prev, instructors: [...prev.instructors, emptyInstructor()] }))
+
+  // Resources carry stable ids, so these key and patch by id rather than index.
+  const addResource = () =>
+    setForm((prev) => ({
+      ...prev,
+      resources: [...prev.resources, { id: uid('res'), title: '', kind: 'reading' }],
+    }))
+
+  const setResource = (id: string, patch: Partial<LearningResource>) =>
+    setForm((prev) => ({
+      ...prev,
+      resources: prev.resources.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+    }))
+
+  const removeResource = (id: string) =>
+    setForm((prev) => ({ ...prev, resources: prev.resources.filter((r) => r.id !== id) }))
 
   const removeInstructor = (index: number) =>
     setForm((prev) => {
@@ -654,6 +683,9 @@ function CourseFormModal({
       instructors: form.instructors
         .map((i) => ({ ...i, name: i.name.trim() }))
         .filter((i) => i.name),
+      resources: form.resources
+        .map((r) => ({ ...r, title: r.title.trim(), url: r.url?.trim() || undefined }))
+        .filter((r) => r.title),
       url: form.url.trim() || undefined,
       targetGrade: target,
       notes: form.notes.trim() || undefined,
@@ -781,6 +813,67 @@ function CourseFormModal({
               onClick={addInstructor}
             >
               Add instructor
+            </Button>
+          </div>
+        </Field>
+
+        <Field
+          label="Resources"
+          hint="Books, recordings and sheets for this course. Themes pick from this list; you track progress on the Resources page."
+        >
+          <div className="flex flex-col gap-2">
+            {form.resources.map((r, i) => (
+              <div
+                key={r.id}
+                className="flex flex-col gap-2 rounded-xl border border-line bg-surface-2/50 p-2 sm:flex-row sm:items-center"
+              >
+                <Input
+                  value={r.title}
+                  aria-label={`Resource ${i + 1} title`}
+                  placeholder="The C Programming Language"
+                  className="min-w-0 flex-1"
+                  onChange={(e) => setResource(r.id, { title: e.target.value })}
+                />
+                <div className="flex items-center gap-2">
+                  <div className="w-28 shrink-0">
+                    <Select
+                      value={r.kind}
+                      aria-label={`Resource ${i + 1} kind`}
+                      onChange={(e) => setResource(r.id, { kind: e.target.value as ResourceKind })}
+                    >
+                      {RESOURCE_KINDS.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {RESOURCE_KIND_LABEL[kind]}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <Input
+                    type="url"
+                    value={r.url ?? ''}
+                    aria-label={`Resource ${i + 1} link`}
+                    placeholder="https://"
+                    className="min-w-0 flex-1 sm:w-44 sm:flex-none"
+                    onChange={(e) => setResource(r.id, { url: e.target.value })}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remove resource ${i + 1}`}
+                    icon={<Trash2 className="h-4 w-4" />}
+                    onClick={() => removeResource(r.id)}
+                  />
+                </div>
+              </div>
+            ))}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              icon={<Plus className="h-4 w-4" />}
+              onClick={addResource}
+            >
+              Add resource
             </Button>
           </div>
         </Field>

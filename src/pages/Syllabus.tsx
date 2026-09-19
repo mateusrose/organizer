@@ -1,13 +1,12 @@
 import { useCallback, useMemo, useState } from 'react'
 import { BookOpen, ExternalLink, GraduationCap, Plus, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { RESOURCE_KINDS, RESOURCE_KIND_LABEL } from '../types'
+import { RESOURCE_KIND_LABEL } from '../types'
 import type {
   Assessment,
   Course,
-  LearningResource,
-  ResourceKind,
   Theme,
+  ThemeResourceRef,
   ThemeTodo,
 } from '../types'
 import { cn } from '../lib/cn'
@@ -435,9 +434,9 @@ function ThemeList({
                         <span className="block text-[11px] text-faint">
                           {fmtDayMonth(theme.startsOn)} – {fmtDayMonth(theme.endsOn)}
                           {todos.total > 0 && ` · ${todos.done}/${todos.total} done`}
-                          {theme.resources.length > 0 &&
-                            ` · ${theme.resources.length} ${
-                              theme.resources.length === 1 ? 'resource' : 'resources'
+                          {theme.resourceRefs.length > 0 &&
+                            ` · ${theme.resourceRefs.length} ${
+                              theme.resourceRefs.length === 1 ? 'resource' : 'resources'
                             }`}
                         </span>
                       </span>
@@ -476,6 +475,7 @@ function ThemeEditor({
   onClose: () => void
 }) {
   const addTheme = useStore((s) => s.addTheme)
+  const addCourseResource = useStore((s) => s.addCourseResource)
   const updateTheme = useStore((s) => s.updateTheme)
   const deleteTheme = useStore((s) => s.deleteTheme)
 
@@ -488,7 +488,7 @@ function ThemeEditor({
   const [url, setUrl] = useState(theme?.url ?? '')
   const [assessmentId, setAssessmentId] = useState(theme?.assessmentId ?? '')
   const [todos, setTodos] = useState<ThemeTodo[]>(theme?.todos ?? [])
-  const [resources, setResources] = useState<LearningResource[]>(theme?.resources ?? [])
+  const [refs, setRefs] = useState<ThemeResourceRef[]>(theme?.resourceRefs ?? [])
   const [titleError, setTitleError] = useState<string>()
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -507,6 +507,8 @@ function ThemeEditor({
     setAssessmentId((prev) =>
       assessments.some((a) => a.id === prev && a.courseId === next) ? prev : '',
     )
+    // Resources belong to a course, so a move leaves them behind.
+    setRefs([])
   }
 
   // --- checklist -----------------------------------------------------------
@@ -516,11 +518,32 @@ function ThemeEditor({
   const dropTodo = (id: string) => setTodos((prev) => prev.filter((t) => t.id !== id))
 
   // --- resources -----------------------------------------------------------
-  const addResource = () =>
-    setResources((prev) => [...prev, { id: uid('res'), title: '', kind: 'reading' }])
-  const patchResource = (id: string, patch: Partial<LearningResource>) =>
-    setResources((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)))
-  const dropResource = (id: string) => setResources((prev) => prev.filter((r) => r.id !== id))
+  // The course owns them; a theme only says which ones it needs and for what.
+  const refFor = (resourceId: string) => refs.find((r) => r.resourceId === resourceId)
+
+  const toggleRef = (resourceId: string, on: boolean) =>
+    setRefs((prev) =>
+      on
+        ? prev.some((r) => r.resourceId === resourceId)
+          ? prev
+          : [...prev, { resourceId }]
+        : prev.filter((r) => r.resourceId !== resourceId),
+    )
+
+  const setDetail = (resourceId: string, detail: string) =>
+    setRefs((prev) => prev.map((r) => (r.resourceId === resourceId ? { ...r, detail } : r)))
+
+  // A course with no resources yet would leave this picker empty and dead, so
+  // one can be created from here. It lands on the course immediately — that is
+  // where it lives — even if this theme is never saved.
+  const [newTitle, setNewTitle] = useState('')
+  const createResource = () => {
+    const title = newTitle.trim()
+    if (!title || !courseId) return
+    const created = addCourseResource(courseId, { title, kind: 'reading' })
+    setRefs((prev) => [...prev, { resourceId: created.id }])
+    setNewTitle('')
+  }
 
   const save = () => {
     if (!title.trim()) {
@@ -541,9 +564,10 @@ function ThemeEditor({
       url: url.trim() || undefined,
       assessmentId: assessmentId || undefined,
       todos: todos.map((t) => ({ ...t, text: t.text.trim() })).filter((t) => t.text),
-      resources: resources
-        .map((r) => ({ ...r, title: r.title.trim(), url: r.url?.trim() || undefined }))
-        .filter((r) => r.title),
+      resourceRefs: refs.map((r) => ({
+        resourceId: r.resourceId,
+        detail: r.detail?.trim() || undefined,
+      })),
     }
 
     if (theme) {
@@ -755,60 +779,76 @@ function ThemeEditor({
           </Field>
 
           {/* resources ---------------------------------------------------- */}
-          <Field label="Learning resources" hint="Rows without a title are dropped on save">
+          <Field
+            label="Learning resources"
+            hint={
+              course
+                ? `Picked from ${course.code}. Manage the list itself on the course.`
+                : 'Pick a course first'
+            }
+          >
             <div className="flex flex-col gap-2">
-              {resources.map((r, i) => (
-                <div key={r.id} className="flex flex-col gap-2 rounded-xl border border-line bg-surface-2/50 p-2 sm:flex-row sm:items-center">
-                  <Input
-                    value={r.title}
-                    aria-label={`Resource ${i + 1} title`}
-                    placeholder="K&R chapter 5"
-                    className="min-w-0 flex-1"
-                    onChange={(e) => patchResource(r.id, { title: e.target.value })}
-                  />
-                  <div className="flex items-center gap-2">
-                    <div className="w-28 shrink-0">
-                      <Select
-                        value={r.kind}
-                        aria-label={`Resource ${i + 1} kind`}
-                        onChange={(e) =>
-                          patchResource(r.id, { kind: e.target.value as ResourceKind })
-                        }
-                      >
-                        {RESOURCE_KINDS.map((kind) => (
-                          <option key={kind} value={kind}>
-                            {RESOURCE_KIND_LABEL[kind]}
-                          </option>
-                        ))}
-                      </Select>
+              {(course?.resources ?? []).map((r) => {
+                const ref = refFor(r.id)
+                return (
+                  <div
+                    key={r.id}
+                    className="flex flex-col gap-2 rounded-xl border border-line bg-surface-2/50 p-2"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Checkbox
+                        checked={ref !== undefined}
+                        onChange={(on) => toggleRef(r.id, on)}
+                        className="shrink-0"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{r.title}</span>
+                      <Badge>{RESOURCE_KIND_LABEL[r.kind]}</Badge>
                     </div>
-                    <Input
-                      type="url"
-                      value={r.url ?? ''}
-                      aria-label={`Resource ${i + 1} link`}
-                      placeholder="https://"
-                      className="min-w-0 flex-1 sm:w-44 sm:flex-none"
-                      onChange={(e) => patchResource(r.id, { url: e.target.value })}
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Remove resource ${i + 1}`}
-                      icon={<Trash2 className="h-4 w-4" />}
-                      onClick={() => dropResource(r.id)}
-                    />
+                    {ref && (
+                      <Input
+                        value={ref.detail ?? ''}
+                        aria-label={`What this theme needs from ${r.title}`}
+                        placeholder="chapters 5-6 only — optional"
+                        className="min-w-0"
+                        onChange={(e) => setDetail(r.id, e.target.value)}
+                      />
+                    )}
                   </div>
+                )
+              })}
+
+              {course && course.resources.length === 0 && (
+                <p className="text-[13px] text-faint">
+                  {course.code} has no resources yet. Add the first one below, or manage the whole
+                  list on the course.
+                </p>
+              )}
+
+              {course && (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={newTitle}
+                    aria-label="New resource title"
+                    placeholder={`Add a resource to ${course.code}`}
+                    className="min-w-0 flex-1"
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        createResource()
+                      }
+                    }}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Add this resource to the course"
+                    disabled={!newTitle.trim()}
+                    icon={<Plus className="h-4 w-4" />}
+                    onClick={createResource}
+                  />
                 </div>
-              ))}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="self-start"
-                icon={<Plus className="h-4 w-4" />}
-                onClick={addResource}
-              >
-                Add resource
-              </Button>
+              )}
             </div>
           </Field>
 

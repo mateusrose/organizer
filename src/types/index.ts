@@ -56,6 +56,8 @@ export interface Course {
   semesterId: string
   /** Teaching staff, in the order the student wants to see them. */
   instructors: Instructor[]
+  /** Everything to read or watch for this course. Themes point at these. */
+  resources: LearningResource[]
   /** Target final grade on the configured scale. */
   targetGrade?: number
   /** Course homepage / Moodle link. */
@@ -92,12 +94,39 @@ export const RESOURCE_KIND_LABEL: Record<ResourceKind, string> = {
   link: 'Link',
 }
 
-/** Something to read, watch or work through for a theme. */
+/** How far through a resource the student is. */
+export interface ResourceProgress {
+  /** Units done so far. */
+  current: number
+  /** The whole, when it is known. Without it there is a count but no bar. */
+  total?: number
+  /** What is being counted: pages, chapters, videos, exercises. */
+  unit: string
+}
+
+/**
+ * Something to read, watch or work through. Owned by the course — a book serves
+ * several themes, and progress through it only makes sense in one place.
+ */
 export interface LearningResource {
   id: string
   title: string
   kind: ResourceKind
   url?: string
+  progress?: ResourceProgress
+  /** What a number cannot hold — "skipped ch. 4, redo later". */
+  progressNote?: string
+  /** Notes written elsewhere: a tablet app, Obsidian, a shared doc. */
+  notesUrl?: string
+  /** Where the notes are when they are not a link — "Notebook 2, p.14". */
+  notesLocation?: string
+}
+
+/** A course resource a theme uses, narrowed to the part that theme needs. */
+export interface ThemeResourceRef {
+  resourceId: string
+  /** "chapters 5-6 only" — what this theme wants out of it. */
+  detail?: string
 }
 
 export interface Theme {
@@ -120,7 +149,8 @@ export interface Theme {
   assessmentId?: string
   /** The work itself, as checkable points. */
   todos: ThemeTodo[]
-  resources: LearningResource[]
+  /** Which of the course's resources this theme uses, and for what. */
+  resourceRefs: ThemeResourceRef[]
   createdAt: ISODate
   updatedAt: ISODate
 }
@@ -304,7 +334,7 @@ export interface Settings {
 // Persisted database
 // ---------------------------------------------------------------------------
 
-export const DB_VERSION = 5
+export const DB_VERSION = 6
 
 /** A calendar event this app wrote that still needs deleting remotely. */
 export interface PendingEventDeletion {

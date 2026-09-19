@@ -1,6 +1,8 @@
-import { ASSESSMENT_MODES, DB_VERSION } from '../types'
+import { ASSESSMENT_MODES, DB_VERSION, RESOURCE_KINDS } from '../types'
 import type {
   ClassEntry,
+  LearningResource,
+  ThemeResourceRef,
   Course,
   Database,
   Instructor,
@@ -89,7 +91,14 @@ export const emptyDatabase = (): Database => {
  * v1 shape: courses carried a free-text `term` and syllabus units were classes.
  * v2 shape: a course had at most one `instructor`.
  */
-interface LegacyCourse extends Omit<Course, 'semesterId' | 'instructors'> {
+/** v5 shape: a theme carried its own copy of each resource. */
+interface LegacyTheme extends Omit<Theme, 'resourceRefs'> {
+  resources?: LearningResource[]
+  resourceRefs?: ThemeResourceRef[]
+}
+
+interface LegacyCourse extends Omit<Course, 'semesterId' | 'instructors' | 'resources'> {
+  resources?: LearningResource[]
   term?: string
   semesterId?: string
   instructor?: string
@@ -107,7 +116,7 @@ export function migrate(input: unknown): Database {
 
   const courses = (raw.courses ?? []) as LegacyCourse[]
   let semesters = raw.semesters ?? []
-  let themes = raw.themes ?? []
+  let themes: LegacyTheme[] = (raw.themes ?? []) as LegacyTheme[]
   let classes = raw.classes ?? []
   let activeSemesterId = raw.activeSemesterId ?? null
 
@@ -151,7 +160,7 @@ export function migrate(input: unknown): Database {
       for (const m of modules) {
         byCourse.set(m.courseId, [...(byCourse.get(m.courseId) ?? []), m])
       }
-      const promoted: Theme[] = []
+      const promoted: LegacyTheme[] = []
       for (const [courseId, list] of byCourse) {
         const course = courses.find((c) => c.id === courseId)
         const semester = semesters.find((s) => s.id === course?.semesterId) ?? semesters[0]
@@ -167,6 +176,7 @@ export function migrate(input: unknown): Database {
             status: m.completed ? 'done' : 'not-started',
             todos: [],
             resources: m.url ? [{ id: uid('res'), title: m.title, kind: 'link' as const, url: m.url }] : [],
+            resourceRefs: [],
             createdAt: m.createdAt,
             updatedAt: stamp,
           })
@@ -211,13 +221,73 @@ export function migrate(input: unknown): Database {
     mode: ASSESSMENT_MODES.includes(a.mode) ? a.mode : ('individual' as const),
   }))
 
-  // A theme's checklist and resources are collections the UI maps over, so they
-  // have to exist even on a payload written before they did.
+  // A theme's checklist is a collection the UI maps over, so it has to exist even
+  // on a payload written before it did.
   themes = themes.map((t) => ({
     ...t,
     todos: Array.isArray(t.todos) ? t.todos : [],
-    resources: Array.isArray(t.resources) ? t.resources : [],
   }))
+
+  // --- v5 → v6: resources belong to the course, themes point at them --------
+  // A book serves several themes, so each theme used to hold its own copy of it.
+  // Lift every copy onto the owning course, merging duplicates, and leave the
+  // theme holding a reference. Nothing the student typed is thrown away.
+  const resourcesByCourse = new Map<string, LearningResource[]>()
+  for (const c of courses) {
+    const own = Array.isArray(c.resources) ? c.resources : []
+    resourcesByCourse.set(c.id, own.filter((r) => r && r.title))
+  }
+
+  // Two rows are the same thing when they point at the same link. Without a link
+  // on both sides the title has to decide, or "K&R" typed with a url and "k&r"
+  // typed without one survive as two rows that read identically on screen.
+  const norm = (v?: string) => (v ?? '').trim().toLowerCase()
+  const sameThing = (a: { title?: string; url?: string }, b: { title?: string; url?: string }) => {
+    const [au, bu] = [norm(a.url), norm(b.url)]
+    return au && bu ? au === bu : norm(a.title) === norm(b.title)
+  }
+
+  themes = themes.map((t) => {
+    const legacy = Array.isArray(t.resources) ? t.resources : []
+    const shelf = resourcesByCourse.get(t.courseId)
+    const { resources: _dropped, ...rest } = t
+    // A theme whose course is gone keeps nothing to point at.
+    if (!shelf) return { ...rest, resourceRefs: [] }
+
+    const refs: ThemeResourceRef[] = Array.isArray(t.resourceRefs) ? [...t.resourceRefs] : []
+    for (const raw of legacy) {
+      const title = (raw?.title ?? '').trim()
+      if (!title) continue
+      let landed = shelf.find((r) => sameThing(r, raw))
+      if (!landed) {
+        landed = {
+          id: raw.id || uid('res'),
+          title,
+          kind: RESOURCE_KINDS.includes(raw.kind) ? raw.kind : 'reading',
+          url: (raw.url ?? '').trim() || undefined,
+        }
+        shelf.push(landed)
+      } else if (!landed.url && (raw.url ?? '').trim()) {
+        // One copy carried the link and another did not; keep the link.
+        landed.url = (raw.url ?? '').trim()
+      }
+      if (!refs.some((ref) => ref.resourceId === landed.id)) {
+        refs.push({ resourceId: landed.id })
+      }
+    }
+    return { ...rest, resourceRefs: refs }
+  })
+
+  for (const c of courses) c.resources = resourcesByCourse.get(c.id) ?? []
+
+  // A ref to something no longer on the shelf — deleted, or left behind when the
+  // theme moved course — would render as a blank row, so drop it here.
+  themes = themes.map((t) => {
+    const ids = new Set((resourcesByCourse.get(t.courseId) ?? []).map((r) => r.id))
+    const refs = t.resourceRefs ?? []
+    const kept = refs.filter((ref) => ids.has(ref.resourceId))
+    return kept.length === refs.length ? t : { ...t, resourceRefs: kept }
+  })
 
   // --- v2 → v3: several people teach a course, each with a role -------------
   for (const c of courses) {
@@ -244,7 +314,7 @@ export function migrate(input: unknown): Database {
     semesters,
     activeSemesterId,
     courses: courses as Course[],
-    themes,
+    themes: themes as Theme[],
     assessments,
     classes,
     studyBlocks: raw.studyBlocks ?? [],

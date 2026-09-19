@@ -4,6 +4,7 @@ import type {
   ClassEntry,
   Course,
   Database,
+  LearningResource,
   PendingEventDeletion,
   Semester,
   Settings,
@@ -24,16 +25,17 @@ import { uid } from '../lib/id'
 
 type Stamped = 'id' | 'createdAt' | 'updatedAt'
 export type NewSemester = Omit<Semester, Stamped | 'archived'> & { archived?: boolean }
-export type NewCourse = Omit<Course, Stamped | 'archived' | 'semesterId'> & {
+export type NewCourse = Omit<Course, Stamped | 'archived' | 'semesterId' | 'resources'> & {
   archived?: boolean
+  resources?: Course['resources']
   /** Defaults to the active semester. */
   semesterId?: string
 }
-export type NewTheme = Omit<Theme, Stamped | 'status' | 'order' | 'todos' | 'resources'> & {
+export type NewTheme = Omit<Theme, Stamped | 'status' | 'order' | 'todos' | 'resourceRefs'> & {
   status?: Theme['status']
   order?: number
   todos?: Theme['todos']
-  resources?: Theme['resources']
+  resourceRefs?: Theme['resourceRefs']
 }
 export type NewAssessment = Omit<Assessment, Stamped>
 export type NewClass = Omit<ClassEntry, Stamped | 'completed'> & { completed?: boolean }
@@ -61,6 +63,16 @@ export interface AppState {
 
   addCourse: (input: NewCourse) => Course
   updateCourse: (id: string, patch: Partial<Course>) => void
+  /** Returns the new row so a caller can reference it straight away. */
+  addCourseResource: (courseId: string, input: Omit<LearningResource, 'id'>) => LearningResource
+  /** One resource at a time, for the inline edits the Resources page makes. */
+  updateCourseResource: (
+    courseId: string,
+    resourceId: string,
+    patch: Partial<LearningResource>,
+  ) => void
+  /** Also strips the resource from every theme that pointed at it. */
+  removeCourseResource: (courseId: string, resourceId: string) => void
   deleteCourse: (id: string) => void
 
   addAssessment: (input: NewAssessment) => Assessment
@@ -197,10 +209,10 @@ export const useStore = create<AppState>()((set, get) => {
       const theme: Theme = {
         status: 'not-started',
         order: siblings.length,
-        // A theme seeded from the course page starts with an empty checklist
-        // and no resources; the syllabus editor is where those get filled in.
+        // A theme seeded elsewhere starts with an empty checklist and no
+        // resources picked; the syllabus editor is where those get filled in.
         todos: [],
-        resources: [],
+        resourceRefs: [],
         ...input,
         id: uid('thm'),
         createdAt: now(),
@@ -245,6 +257,7 @@ export const useStore = create<AppState>()((set, get) => {
     addCourse: (input) => {
       const course: Course = {
         archived: false,
+        resources: [],
         semesterId: get().db.activeSemesterId ?? get().db.semesters[0]?.id ?? '',
         ...input,
         id: uid('crs'),
@@ -259,6 +272,51 @@ export const useStore = create<AppState>()((set, get) => {
     updateCourse: (id, patch) =>
       commit((db) => {
         db.courses = patchIn(db.courses, id, patch)
+        // The course form hands back a whole resources array, so anything it
+        // dropped has to lose its references in the same write.
+        if (patch.resources) {
+          const live = new Set(patch.resources.map((r) => r.id))
+          db.themes = db.themes.map((t) =>
+            t.courseId === id && t.resourceRefs.some((ref) => !live.has(ref.resourceId))
+              ? { ...t, resourceRefs: t.resourceRefs.filter((ref) => live.has(ref.resourceId)) }
+              : t,
+          )
+        }
+      }),
+    addCourseResource: (courseId, input) => {
+      const resource: LearningResource = { ...input, id: uid('res') }
+      commit((db) => {
+        const course = db.courses.find((c) => c.id === courseId)
+        if (!course) return
+        db.courses = patchIn(db.courses, courseId, {
+          resources: [...course.resources, resource],
+        })
+      })
+      return resource
+    },
+    updateCourseResource: (courseId, resourceId, patch) =>
+      commit((db) => {
+        const course = db.courses.find((c) => c.id === courseId)
+        if (!course) return
+        db.courses = patchIn(db.courses, courseId, {
+          resources: course.resources.map((r) =>
+            r.id === resourceId ? { ...r, ...patch, id: r.id } : r,
+          ),
+        })
+      }),
+    removeCourseResource: (courseId, resourceId) =>
+      commit((db) => {
+        const course = db.courses.find((c) => c.id === courseId)
+        if (!course) return
+        db.courses = patchIn(db.courses, courseId, {
+          resources: course.resources.filter((r) => r.id !== resourceId),
+        })
+        // A theme left pointing at it would render a blank row.
+        db.themes = db.themes.map((t) =>
+          t.courseId === courseId && t.resourceRefs.some((ref) => ref.resourceId === resourceId)
+            ? { ...t, resourceRefs: t.resourceRefs.filter((ref) => ref.resourceId !== resourceId) }
+            : t,
+        )
       }),
     deleteCourse: (id) =>
       commit((db) => {

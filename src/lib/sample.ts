@@ -50,6 +50,7 @@ export function sampleDatabase(now: Date = new Date()): Database {
     ects,
     semesterId: semester.id,
     instructors,
+    resources: [],
     targetGrade,
     archived: false,
     createdAt: stamp,
@@ -161,18 +162,24 @@ export function sampleDatabase(now: Date = new Date()): Database {
       endsOn: spans[i].endsOn,
       status: i < doneCount ? 'done' : i === doneCount ? 'in-progress' : 'not-started',
       todos: [],
-      resources: [],
+      resourceRefs: [],
       createdAt: stamp,
       updatedAt: stamp,
     }))
   }
 
   const todo = (text: string, done = false): ThemeTodo => ({ id: uid('td'), text, done })
-  const resource = (title: string, kind: LearningResource['kind'], url?: string): LearningResource => ({
+  const resource = (
+    title: string,
+    kind: LearningResource['kind'],
+    url?: string,
+    extra: Partial<LearningResource> = {},
+  ): LearningResource => ({
     id: uid('res'),
     title,
     kind,
     url,
+    ...extra,
   })
 
   db.themes = [
@@ -210,10 +217,35 @@ export function sampleDatabase(now: Date = new Date()): Database {
       todo('Draw the stack vs heap diagram from memory'),
       todo('Fix the leaks flagged by valgrind in lab 3'),
     ]
-    pointers.resources = [
-      resource('K&R chapter 5 — Pointers and Arrays', 'reading'),
-      resource('Lecture 7: memory layout', 'video', 'https://example.edu/prg102/lec7'),
-      resource('Pointer exercise sheet', 'exercise', 'https://example.edu/prg102/ex7.pdf'),
+  }
+
+  // --- resources live on the course; themes point at the part they need -----
+  const kr = resource('The C Programming Language (K&R)', 'reading', undefined, {
+    progress: { current: 120, total: 272, unit: 'pages' },
+    progressNote: 'Skimmed ch. 4, want a second pass before the exam.',
+    notesLocation: 'Notebook 2, from p.14',
+  })
+  const lecture7 = resource('Lecture 7: memory layout', 'video', 'https://example.edu/prg102/lec7', {
+    progress: { current: 1, total: 1, unit: 'videos' },
+  })
+  const exercises = resource('Pointer exercise sheet', 'exercise', 'https://example.edu/prg102/ex7.pdf', {
+    progress: { current: 3, total: 12, unit: 'exercises' },
+    notesUrl: 'https://notes.example.com/prg102/pointers',
+  })
+  programming.resources = [kr, lecture7, exercises]
+
+  const chainRule = resource('Chain rule worked examples', 'slides')
+  const calcBook = resource('Stewart, Calculus — 8th edition', 'reading', undefined, {
+    progress: { current: 40, unit: 'pages' },
+    notesLocation: 'Tablet · Calculus notebook',
+  })
+  calculus.resources = [chainRule, calcBook]
+
+  if (pointers) {
+    pointers.resourceRefs = [
+      { resourceId: kr.id, detail: 'chapter 5 only' },
+      { resourceId: lecture7.id },
+      { resourceId: exercises.id, detail: 'questions 1-8' },
     ]
   }
 
@@ -223,7 +255,10 @@ export function sampleDatabase(now: Date = new Date()): Database {
       todo('Memorise the differentiation rules', true),
       todo('Problem set 4, odd numbers'),
     ]
-    derivatives.resources = [resource('Chain rule worked examples', 'slides')]
+    derivatives.resourceRefs = [
+      { resourceId: chainRule.id },
+      { resourceId: calcBook.id, detail: 'sections 3.1-3.4' },
+    ]
   }
 
   const mkTask = (

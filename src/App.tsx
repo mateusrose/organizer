@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'r
 import { Shell } from './components/layout/Shell'
 import Dashboard from './pages/Dashboard'
 import Courses from './pages/Courses'
+import Resources from './pages/Resources'
 import Syllabus from './pages/Syllabus'
 import Assessments from './pages/Assessments'
 import Planner from './pages/Planner'
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="/courses" element={<Courses />} />
           <Route path="/syllabus" element={<Syllabus />} />
           <Route path="/assessments" element={<Assessments />} />
+          <Route path="/resources" element={<Resources />} />
           <Route path="/planner" element={<Planner />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/tasks" element={<Tasks />} />
