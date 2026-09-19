@@ -140,6 +140,13 @@ html.light [data-course='indigo']  { --course: #4338ca; --course-bg: rgb(67 56 2
 
 html, body, #root { height: 100%; }
 
+/* A child that overreaches must not widen the page: a phone answers a too-wide
+   document by widening its layout viewport and zooming the whole app out, which
+   strands the fixed bottom bar off-screen. `clip` rather than `hidden` — hidden
+   would make this a scroll container and break `position: sticky` on the sidebar
+   and the top bar. */
+html, body { overflow-x: clip; }
+
 body {
   margin: 0;
   background:

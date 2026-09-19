@@ -337,13 +337,13 @@ function CourseCard({
   const progress = themeProgress(themes)
   const behindCount = themes.filter((t) => isBehind(t)).length
 
-  // Docentes read as plain names; tutors are tagged so the two never blur.
-  const meta = [
-    `${trim(course.ects)} ECTS`,
-    ...course.instructors.map((i) =>
-      i.role === 'docente' ? i.name : `${i.name} · ${INSTRUCTOR_ROLE_LABEL[i.role]}`,
-    ),
-  ].filter(Boolean) as string[]
+  // Grouped by role and given their own lines. Joined into the meta line they
+  // were one `truncate` run, so a course with a few tutors both lost the names
+  // off the end and forced the card wider than a phone.
+  const staff = INSTRUCTOR_ROLES.map((role) => ({
+    role,
+    names: course.instructors.filter((i) => i.role === role).map((i) => i.name),
+  })).filter((group) => group.names.length > 0)
 
   const target = course.targetGrade
   const needs =
@@ -374,7 +374,13 @@ function CourseCard({
             <h3 className="mt-0.5 truncate text-[15px] leading-tight font-semibold tracking-tight text-ink">
               {course.name}
             </h3>
-            <p className="mt-1 truncate text-[12px] text-muted">{meta.join(' · ')}</p>
+            <p className="mt-1 truncate text-[12px] text-muted">{trim(course.ects)} ECTS</p>
+            {staff.map(({ role, names }) => (
+              <p key={role} className="mt-0.5 text-[12px] leading-snug text-muted">
+                <span className="text-faint">{INSTRUCTOR_ROLE_LABEL[role]}</span>{' '}
+                {names.join(' · ')}
+              </p>
+            ))}
           </div>
         </div>
 
