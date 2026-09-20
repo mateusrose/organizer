@@ -421,7 +421,11 @@ export default function SettingsPage() {
                 </Step>
                 <Step n={6}>
                   Copy the client ID it gives you — it ends in <Mono>{CLIENT_ID_SUFFIX}</Mono> — and
-                  paste it in the box above.
+                  paste it in the box above, then press <Mono>Connect Google</Mono>.
+                </Step>
+                <Step n={7}>
+                  In the <Mono>Google Calendar</Mono> card below, turn mirroring on and choose which
+                  calendar your deadlines go to. Nothing is written until you pick one.
                 </Step>
               </ol>
 

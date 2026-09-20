@@ -66,7 +66,10 @@ Only needed for Calendar sync. Data sync uses GitHub instead, and everything els
    - `https://<username>.github.io`
    (Origins are scheme + host only — no path, no trailing slash, so no `/<repo>/` here.)
 6. Copy the client ID (it looks like `1234567890-abcdef.apps.googleusercontent.com`) and paste it into
-   **Settings → Google** in the app.
+   **Settings → Google** in the app, then press **Connect Google**.
+7. In **Settings → Google Calendar**, turn on **Mirror into Google Calendar** and pick the calendar
+   under **Write deadlines to**. Nothing is pushed until a calendar is chosen — the app never creates
+   one and never writes anywhere you did not point it.
 
 Notes:
 
