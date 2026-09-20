@@ -110,6 +110,30 @@ const boundary = (slot: GoogleDateTime | undefined): ISODate | null => {
   return null
 }
 
+/**
+ * Every event id in a calendar, following pagination to the end.
+ *
+ * `listEvents` caps at one page because the agenda only ever needs a visible
+ * window; a wipe has to see all of them or it leaves stragglers behind.
+ */
+export async function listAllEventIds(token: string, calendarId: string): Promise<string[]> {
+  const ids: string[] = []
+  let pageToken: string | undefined
+  do {
+    const params = new URLSearchParams({ maxResults: '2500', showDeleted: 'false' })
+    if (pageToken) params.set('pageToken', pageToken)
+    const res = await gapiFetch<{ items?: GoogleEvent[]; nextPageToken?: string }>(
+      `${CAL_API}/calendars/${path(calendarId)}/events?${params.toString()}`,
+      token,
+    )
+    for (const item of res?.items ?? []) {
+      if (item.id && item.status !== 'cancelled') ids.push(item.id)
+    }
+    pageToken = res?.nextPageToken
+  } while (pageToken)
+  return ids
+}
+
 export async function listEvents(
   token: string,
   calendarId: string,

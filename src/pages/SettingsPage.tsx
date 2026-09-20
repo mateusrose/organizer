@@ -568,7 +568,7 @@ export default function SettingsPage() {
                 calendarsLoading
                   ? 'Loading your calendars…'
                   : settings.studyCalendarId
-                    ? 'Only this calendar is ever written to.'
+                    ? 'Every push clears this calendar and rewrites it — keep one just for Semestre.'
                     : 'Pick one before pushing — nothing is written until you do.'
               }
             >

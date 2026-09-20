@@ -16,6 +16,7 @@ import {
 } from '../lib/google/auth'
 import {
   deleteEvent,
+  listAllEventIds,
   verifyCalendar,
   listCalendars,
   listEvents,
@@ -365,6 +366,13 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
           useStore.getState().updateSettings({ studyCalendarId: undefined })
           throw new Error(NO_CALENDAR)
         }
+        // Every push empties the target, so it must not be a calendar with a
+        // life of its own. Losing your main calendar is not undoable.
+        if (get().calendars.some((c) => c.id === calendarId && c.primary)) {
+          throw new Error(
+            'That is your main Google calendar, and every push clears the one it writes to. Pick a separate calendar for Semestre.',
+          )
+        }
 
         const courses = new Map(useStore.getState().db.courses.map((c) => [c.id, c]))
         let written = 0
@@ -391,44 +399,58 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
           if (settled.length > 0) useStore.getState().clearPendingDeletions(settled)
         }
 
+        // The calendar is rebuilt from scratch each push, so nothing can drift:
+        // no duplicates from a run whose ids were lost, no survivors of an event
+        // deleted by hand. Snapshot first, write the new set, and only then
+        // remove the old one — a run that dies halfway leaves duplicates the
+        // next push cleans up, rather than an empty calendar.
+        const stale = await listAllEventIds(token, calendarId)
+
         // Sequential on purpose: a handful of writes is fast enough and Google
         // throttles bursts on a fresh calendar.
         for (const a of useStore.getState().db.assessments) {
+          // Graded work is simply not rebuilt.
           if (a.status === 'graded') {
-            // Nothing left to be reminded about — retire the deadline event
-            // rather than leaving it on the calendar saying "To do" forever.
             if (a.calendarEventId) {
-              await deleteEvent(token, calendarId, a.calendarEventId)
               useStore.getState().updateAssessment(a.id, { calendarEventId: undefined })
-              removed += 1
             }
             continue
           }
           const dueMs = Date.parse(a.dueAt)
           if (!Number.isFinite(dueMs)) continue
+
+          // The event always ENDS at the deadline. An assignment or project with
+          // a work window spans it; anything else gets a short marker leading up
+          // to the deadline, which keeps it on the due day — half an hour *after*
+          // a 23:59 deadline used to spill past midnight and draw on both days.
+          const startMs = a.startsAt ? Date.parse(a.startsAt) : Number.NaN
+          const fromMs =
+            Number.isFinite(startMs) && startMs < dueMs
+              ? startMs
+              : dueMs - DEADLINE_MINUTES * 60_000
+
           const course = courses.get(a.courseId)
           const eventId = await upsertEvent(token, calendarId, {
-            id: a.calendarEventId,
             summary: titled(course, a.title),
             description: assessmentDescription(a, course),
-            start: new Date(dueMs).toISOString(),
-            end: new Date(dueMs + DEADLINE_MINUTES * 60_000).toISOString(),
+            start: new Date(fromMs).toISOString(),
+            end: new Date(dueMs).toISOString(),
             colorId: '11',
             source: sourceFor(a.url ?? course?.url),
           })
-          if (eventId !== a.calendarEventId) {
-            useStore.getState().updateAssessment(a.id, { calendarEventId: eventId })
-          }
+          useStore.getState().updateAssessment(a.id, { calendarEventId: eventId })
           written += 1
         }
 
-        // Study blocks are no longer mirrored. Any this app pushed before that
-        // decision are taken back out, so nothing is left orphaned in Google.
-        // After one sync there is nothing left to find.
+        // Study blocks stopped being mirrored; the wipe takes whatever they left
+        // behind, so only the stale local id needs clearing.
         for (const b of useStore.getState().db.studyBlocks) {
           if (!b.calendarEventId) continue
-          await deleteEvent(token, calendarId, b.calendarEventId)
           useStore.getState().updateStudyBlock(b.id, { calendarEventId: undefined })
+        }
+
+        for (const id of stale) {
+          await deleteEvent(token, calendarId, id)
           removed += 1
         }
 
