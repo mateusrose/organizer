@@ -16,6 +16,8 @@ import {
 } from '../lib/google/auth'
 import {
   deleteEvent,
+  GOOGLE_EVENT_COLOR,
+  GOOGLE_FALLBACK_COLOR,
   listAllEventIds,
   verifyCalendar,
   listCalendars,
@@ -444,7 +446,7 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
             description: assessmentDescription(a, course),
             start: new Date(fromMs).toISOString(),
             end: new Date(dueMs).toISOString(),
-            colorId: '11',
+            colorId: course ? GOOGLE_EVENT_COLOR[course.color] : GOOGLE_FALLBACK_COLOR,
             // A deadline is not an appointment: a three-week project band would
             // otherwise show as three weeks of busy to anyone sharing the calendar.
             transparency: 'transparent',

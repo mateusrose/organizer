@@ -1,4 +1,4 @@
-import type { CalendarEvent, ISODate } from '../../types'
+import type { CalendarEvent, CourseColor, ISODate } from '../../types'
 import { format } from '../date'
 import { GoogleApiError, gapiFetch } from './auth'
 
@@ -13,6 +13,31 @@ const statusOf = (err: unknown): number => (err instanceof GoogleApiError ? err.
 // ---------------------------------------------------------------------------
 // Calendars
 // ---------------------------------------------------------------------------
+
+/**
+ * Course colour → Google's event palette.
+ *
+ * Google allows only these eleven ids on an event, so this is a nearest match,
+ * not a translation. The app has three blues and three purple-pinks where Google
+ * has two of each, so sky/cyan and violet/fuchsia share an id — adjacent hues
+ * that were never going to be told apart at chip size anyway. Tomato (11) is
+ * deliberately left free as the no-course fallback.
+ */
+export const GOOGLE_EVENT_COLOR: Record<CourseColor, string> = {
+  violet: '3', //  Grape
+  sky: '7', //     Peacock
+  emerald: '10', // Basil
+  amber: '5', //   Banana
+  rose: '4', //    Flamingo
+  cyan: '7', //    Peacock
+  fuchsia: '3', // Grape
+  lime: '2', //    Sage
+  orange: '6', //  Tangerine
+  indigo: '9', //  Blueberry
+}
+
+/** Used when an assessment has no course to take a colour from. */
+export const GOOGLE_FALLBACK_COLOR = '11' // Tomato
 
 export interface CalendarSummary {
   id: string
