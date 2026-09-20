@@ -362,15 +362,24 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
         if (!calendarId) throw new Error(NO_CALENDAR)
         // The user may have deleted it in Google since choosing it. Forget the
         // dead id rather than writing somewhere they did not pick.
-        if (!(await verifyCalendar(token, calendarId))) {
+        const target = await verifyCalendar(token, calendarId)
+        if (!target.exists) {
           useStore.getState().updateSettings({ studyCalendarId: undefined })
           throw new Error(NO_CALENDAR)
         }
-        // Every push empties the target, so it must not be a calendar with a
-        // life of its own. Losing your main calendar is not undoable.
-        if (get().calendars.some((c) => c.id === calendarId && c.primary)) {
+        // Every push empties the target, so refuse anything with a life of its
+        // own. Checked against the server on each push rather than the calendar
+        // list in the store: that list is only filled by the Settings page, so a
+        // push from the top bar on a fresh load would find it empty and sail
+        // straight through the check.
+        if (target.primary) {
           throw new Error(
             'That is your main Google calendar, and every push clears the one it writes to. Pick a separate calendar for Semestre.',
+          )
+        }
+        if (target.accessRole !== 'owner') {
+          throw new Error(
+            `You do not own “${target.summary ?? 'that calendar'}”, and every push clears the one it writes to. Pick a calendar of your own.`,
           )
         }
 
@@ -436,6 +445,9 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
             start: new Date(fromMs).toISOString(),
             end: new Date(dueMs).toISOString(),
             colorId: '11',
+            // A deadline is not an appointment: a three-week project band would
+            // otherwise show as three weeks of busy to anyone sharing the calendar.
+            transparency: 'transparent',
             source: sourceFor(a.url ?? course?.url),
           })
           useStore.getState().updateAssessment(a.id, { calendarEventId: eventId })
@@ -449,9 +461,19 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
           useStore.getState().updateStudyBlock(b.id, { calendarEventId: undefined })
         }
 
+        let failed = 0
         for (const id of stale) {
-          await deleteEvent(token, calendarId, id)
-          removed += 1
+          try {
+            await deleteEvent(token, calendarId, id)
+            removed += 1
+          } catch {
+            // One stubborn event must not abandon the run with the new set
+            // written and the old set half cleared; the next push retries.
+            failed += 1
+          }
+        }
+        if (failed > 0) {
+          toast.info(`${failed} old ${failed === 1 ? 'event' : 'events'} could not be removed — next push retries`)
         }
 
         return { written, removed }

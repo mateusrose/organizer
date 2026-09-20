@@ -61,15 +61,44 @@ export async function listCalendars(
  * a target that has been deleted in Google's UI is reported rather than quietly
  * replaced by a new one the user never asked for.
  */
-export async function verifyCalendar(token: string, id: string): Promise<boolean> {
+export interface CalendarCheck {
+  /** False only when Google says it is gone, never on a transient failure. */
+  exists: boolean
+  primary: boolean
+  /** 'owner' | 'writer' | 'reader' | … — a wipe demands 'owner'. */
+  accessRole?: string
+  summary?: string
+}
+
+/**
+ * Confirm the chosen calendar, and report enough about it to refuse a wipe.
+ *
+ * Reads the `calendarList` entry rather than the calendar itself: `calendars.get`
+ * returns neither `primary` nor `accessRole`, so a caller asking "is this safe to
+ * empty?" could only guess. Anything a push must know has to come from the
+ * server on the spot — a cached list in the store is empty on a fresh load, and
+ * a destructive check that quietly passes when it has no data is worse than none.
+ */
+export async function verifyCalendar(token: string, id: string): Promise<CalendarCheck> {
   try {
-    const cal = await gapiFetch<{ id?: string }>(`${CAL_API}/calendars/${path(id)}`, token)
-    return Boolean(cal?.id)
+    const cal = await gapiFetch<{
+      id?: string
+      primary?: boolean
+      accessRole?: string
+      summary?: string
+      summaryOverride?: string
+    }>(`${CAL_API}/users/me/calendarList/${path(id)}`, token)
+    return {
+      exists: Boolean(cal?.id),
+      primary: Boolean(cal?.primary),
+      accessRole: cal?.accessRole,
+      summary: cal?.summaryOverride ?? cal?.summary,
+    }
   } catch (err) {
     const status = statusOf(err)
     // Only 404/410 means gone. A 403 is usually transient permission or quota
     // trouble, and throwing the user's choice away over one would be rude.
-    if (status === 404 || status === 410) return false
+    if (status === 404 || status === 410) return { exists: false, primary: false }
     throw err
   }
 }
@@ -182,6 +211,8 @@ export interface EventInput {
   end: ISODate
   allDay?: boolean
   colorId?: string
+  /** 'transparent' keeps the event out of free/busy. */
+  transparency?: 'opaque' | 'transparent'
   source?: { title: string; url: string }
 }
 
@@ -200,6 +231,7 @@ function eventBody(event: EventInput): Record<string, unknown> {
     end: slot(event.end),
   }
   if (event.colorId) body.colorId = event.colorId
+  if (event.transparency) body.transparency = event.transparency
   // Google rejects a `source` without a valid http(s) url.
   if (event.source && isHttpUrl(event.source.url)) body.source = event.source
   return body
