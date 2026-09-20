@@ -38,6 +38,7 @@ import {
   PageHeader,
   ProgressBar,
   SegmentedControl,
+  Select,
   Toggle,
 } from '../components/ui'
 import { useAllSemesters, useDb, useSettings, useStore } from '../store/useStore'
@@ -67,6 +68,7 @@ export default function SettingsPage() {
   const settings = useSettings()
   const db = useDb()
   const updateSettings = useStore((s) => s.updateSettings)
+  const setStudyCalendar = useStore((s) => s.setStudyCalendar)
   const replaceDatabase = useStore((s) => s.replaceDatabase)
   const resetDatabase = useStore((s) => s.resetDatabase)
 
@@ -79,6 +81,9 @@ export default function SettingsPage() {
   const signIn = useGoogle((s) => s.signIn)
   const signOut = useGoogle((s) => s.signOut)
   const syncCalendar = useGoogle((s) => s.syncCalendar)
+  const calendars = useGoogle((s) => s.calendars)
+  const calendarsLoading = useGoogle((s) => s.calendarsLoading)
+  const loadCalendars = useGoogle((s) => s.loadCalendars)
 
   const [dialog, setDialog] = useState<Dialog>(null)
   const syncOn = useSync((s) => s.status !== 'off')
@@ -168,14 +173,18 @@ export default function SettingsPage() {
 
   const runCalendar = async () => {
     try {
+      // `syncCalendar` reports both outcomes itself — toasting here too gave
+      // every successful push two notifications.
       await syncCalendar()
-      const state = useGoogle.getState().calendarSync
-      if (state.status === 'error') toast.error(state.message)
-      else toast.success('Calendar updated')
     } catch {
       toast.error('Could not reach Google Calendar')
     }
   }
+
+  // The picker needs the account's calendars; refetch whenever a sign-in lands.
+  useEffect(() => {
+    if (signedIn) void loadCalendars()
+  }, [signedIn, loadCalendars])
 
   // --- data ---------------------------------------------------------------
   const bytes = useMemo(() => new Blob([JSON.stringify(db)]).size, [db])
@@ -533,7 +542,7 @@ export default function SettingsPage() {
             title="Google Calendar"
             subtitle={
               signedIn
-                ? 'Mirror deadlines and study blocks into your calendar.'
+                ? 'Put your assessment deadlines into a calendar you choose.'
                 : 'Connect your Google account above to turn this on.'
             }
           />
@@ -543,8 +552,44 @@ export default function SettingsPage() {
             disabled={!signedIn}
             onChange={(calendarSyncEnabled) => updateSettings({ calendarSyncEnabled })}
             label="Mirror into Google Calendar"
-            hint="Copies deadlines and study blocks into a dedicated “Semestre · Study plan” calendar, so they show up next to everything else in your day."
+            hint="Copies your assessment deadlines across, so they show up next to everything else in your day. Study blocks stay in Semestre."
           />
+
+          {signedIn && (
+            <Field
+              className="mt-4"
+              label="Write deadlines to"
+              htmlFor="cal-target"
+              hint={
+                calendarsLoading
+                  ? 'Loading your calendars…'
+                  : settings.studyCalendarId
+                    ? 'Only this calendar is ever written to.'
+                    : 'Pick one before pushing — nothing is written until you do.'
+              }
+            >
+              <Select
+                id="cal-target"
+                value={settings.studyCalendarId ?? ''}
+                disabled={calendarsLoading || calendars.length === 0}
+                onChange={(e) => setStudyCalendar(e.target.value || undefined)}
+              >
+                <option value="">Choose a calendar…</option>
+                {settings.studyCalendarId &&
+                  !calendars.some((c) => c.id === settings.studyCalendarId) && (
+                    <option value={settings.studyCalendarId}>
+                      {calendarsLoading ? 'Loading…' : 'Unavailable · pick another'}
+                    </option>
+                  )}
+                {calendars.map((cal) => (
+                  <option key={cal.id} value={cal.id}>
+                    {cal.summary}
+                    {cal.primary ? ' (primary)' : ''}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
 
           <Divider className="my-5" />
 
@@ -557,7 +602,19 @@ export default function SettingsPage() {
             <Button
               size="sm"
               icon={<CloudUpload className="h-3.5 w-3.5" />}
-              disabled={!signedIn || calendarBusy}
+              disabled={
+                !signedIn ||
+                calendarBusy ||
+                !settings.calendarSyncEnabled ||
+                !settings.studyCalendarId
+              }
+              title={
+                !settings.calendarSyncEnabled
+                  ? 'Turn mirroring on first'
+                  : !settings.studyCalendarId
+                    ? 'Pick a calendar first'
+                    : undefined
+              }
               loading={calendarBusy}
               onClick={() => void runCalendar()}
             >

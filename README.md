@@ -19,7 +19,7 @@ your browser, and in a private GitHub repository you own.
 - **Tasks** — quick to-dos, optionally attached to a course or an assessment.
 - **Google sign-in** — optional, and only for the two features below.
 - **Sync** — every change is saved to a private GitHub repo a few seconds later, so laptop and phone stay in step.
-- **Calendar sync** — pushes deadlines and planned study blocks into a Google Calendar.
+- **Calendar sync** — pushes assessment deadlines into a Google Calendar you pick in Settings.
 - **Dark mode** — dark by default, light theme in Settings.
 
 ## Run it locally

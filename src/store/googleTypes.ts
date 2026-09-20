@@ -1,4 +1,5 @@
 import type { CalendarEvent, GoogleProfile, SyncState } from '../types'
+import type { CalendarSummary } from '../lib/google/calendar'
 
 /**
  * Contract for the Google integration store (`src/store/useGoogle.ts`).
@@ -19,6 +20,9 @@ export interface GoogleState {
   error: string | null
 
   calendarSync: SyncState
+  /** The account's calendars, for the picker in Settings. Empty until loaded. */
+  calendars: CalendarSummary[]
+  calendarsLoading: boolean
 
   /** Wire up the GIS token client. Safe to call repeatedly. */
   init: (clientId: string) => void
@@ -27,7 +31,9 @@ export interface GoogleState {
   /** Revokes the token and clears local session state. */
   signOut: () => void
 
-  /** Mirror assessments + planned study blocks into Google Calendar. */
+  /** Fetch the account's calendars so the user can choose where deadlines go. */
+  loadCalendars: () => Promise<void>
+  /** Mirror assessment deadlines into the chosen Google Calendar. */
   syncCalendar: () => Promise<void>
   /** Read events from every calendar the user owns, for the agenda views. */
   fetchEvents: (fromISO: string, toISO: string) => Promise<CalendarEvent[]>

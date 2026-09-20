@@ -3,7 +3,6 @@ import { format } from '../date'
 import { GoogleApiError, gapiFetch } from './auth'
 
 /** Summary of the dedicated calendar this app creates and owns. */
-export const STUDY_CALENDAR_SUMMARY = 'Semestre · Study plan'
 
 const CAL_API = 'https://www.googleapis.com/calendar/v3'
 
@@ -41,8 +40,12 @@ async function calendarList(token: string, minAccessRole?: string): Promise<Cale
   return (res?.items ?? []).filter((c) => !c.deleted)
 }
 
-export async function listCalendars(token: string): Promise<CalendarSummary[]> {
-  const items = await calendarList(token)
+export async function listCalendars(
+  token: string,
+  /** 'writer' for the picker: a read-only feed would 403 on every sync. */
+  minAccessRole?: string,
+): Promise<CalendarSummary[]> {
+  const items = await calendarList(token, minAccessRole)
   return items.map((c) => ({
     id: c.id,
     summary: c.summaryOverride ?? c.summary ?? c.id,
@@ -52,49 +55,23 @@ export async function listCalendars(token: string): Promise<CalendarSummary[]> {
 }
 
 /**
- * Resolve the id of the study calendar, creating it on first run. `existingId` is
- * the id remembered in settings — it is verified rather than trusted, because the
- * user may have deleted the calendar in Google's UI.
+ * Confirm the calendar the user picked is still there and still writable.
+ *
+ * The app never creates a calendar: it writes only where it has been pointed, so
+ * a target that has been deleted in Google's UI is reported rather than quietly
+ * replaced by a new one the user never asked for.
  */
-export async function ensureStudyCalendar(token: string, existingId?: string): Promise<string> {
-  if (existingId) {
-    try {
-      const cal = await gapiFetch<{ id?: string }>(
-        `${CAL_API}/calendars/${path(existingId)}`,
-        token,
-      )
-      if (cal?.id) return cal.id
-    } catch (err) {
-      const status = statusOf(err)
-      // Gone or no longer ours: fall through and find/create a fresh one.
-      if (status !== 404 && status !== 403 && status !== 410) throw err
-    }
-  }
-
-  const existing = (await calendarList(token, 'writer')).find(
-    (c) => (c.summaryOverride ?? c.summary) === STUDY_CALENDAR_SUMMARY,
-  )
-  if (existing) return existing.id
-
-  const created = await gapiFetch<{ id?: string }>(`${CAL_API}/calendars`, token, {
-    method: 'POST',
-    body: JSON.stringify({
-      summary: STUDY_CALENDAR_SUMMARY,
-      description: 'Deadlines and study blocks mirrored from Semestre.',
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    }),
-  })
-  if (!created?.id) throw new Error('Google Calendar did not return an id for the new calendar.')
-
+export async function verifyCalendar(token: string, id: string): Promise<boolean> {
   try {
-    await gapiFetch(`${CAL_API}/users/me/calendarList/${path(created.id)}`, token, {
-      method: 'PATCH',
-      body: JSON.stringify({ colorId: '7', selected: true }),
-    })
-  } catch {
-    // Purely cosmetic — a calendar without our colour still works.
+    const cal = await gapiFetch<{ id?: string }>(`${CAL_API}/calendars/${path(id)}`, token)
+    return Boolean(cal?.id)
+  } catch (err) {
+    const status = statusOf(err)
+    // Only 404/410 means gone. A 403 is usually transient permission or quota
+    // trouble, and throwing the user's choice away over one would be rude.
+    if (status === 404 || status === 410) return false
+    throw err
   }
-  return created.id
 }
 
 // ---------------------------------------------------------------------------

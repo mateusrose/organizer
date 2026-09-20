@@ -324,9 +324,12 @@ export interface Settings {
   gradeScale: GradeScale
   /** Google OAuth client id, entered by the user at runtime. */
   googleClientId?: string
-  /** Id of the dedicated Google Calendar this app writes study blocks to. */
+  /**
+   * The Google Calendar the user chose for deadlines. The app writes nowhere
+   * else and never creates one; unset means nothing is pushed.
+   */
   studyCalendarId?: string
-  /** Mirror assessments + study blocks into Google Calendar. */
+  /** Mirror assessment deadlines into Google Calendar. */
   calendarSyncEnabled: boolean
 }
 

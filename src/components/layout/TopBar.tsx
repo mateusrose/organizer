@@ -46,7 +46,11 @@ export function TopBar() {
             title="Sync now"
             onClick={() => {
               void pullNow()
-              if (settings.calendarSyncEnabled) void google.syncCalendar()
+              // Without a chosen calendar a push only produces an error toast,
+            // and this button fires on every manual refresh.
+            if (settings.calendarSyncEnabled && settings.studyCalendarId) {
+              void google.syncCalendar()
+            }
             }}
           >
             <RefreshCw className={cn('h-4 w-4', syncing && 'animate-spin text-accent-soft')} />

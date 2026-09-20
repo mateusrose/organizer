@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Assessment, CalendarEvent, Course, StudyBlock, SyncState } from '../types'
+import type { Assessment, CalendarEvent, Course, SyncState } from '../types'
 import type { GoogleState } from './googleTypes'
 import { useStore } from './useStore'
 import { toast } from './useToast'
@@ -16,7 +16,7 @@ import {
 } from '../lib/google/auth'
 import {
   deleteEvent,
-  ensureStudyCalendar,
+  verifyCalendar,
   listCalendars,
   listEvents,
   upsertEvent,
@@ -28,6 +28,9 @@ const SKEW_MS = 60_000
 const TOKEN_TIMEOUT_MS = 120_000
 /** Assessments get a 30-minute marker on the calendar at their deadline. */
 const DEADLINE_MINUTES = 30
+
+/** Shown when nothing has been picked, or what was picked no longer exists. */
+const NO_CALENDAR = 'Pick a calendar in Settings first.'
 
 // ---------------------------------------------------------------------------
 // Token plumbing (module-scoped: the GIS client is not serialisable state)
@@ -220,12 +223,6 @@ const assessmentDescription = (a: Assessment, course?: Course): string => {
   return lines.join('\n')
 }
 
-const blockDescription = (b: StudyBlock, course?: Course): string => {
-  const lines = [course ? `${course.name} · ${course.code}` : 'Study block']
-  lines.push(`Status: ${b.status === 'done' ? 'Done' : 'Planned'}`)
-  if (b.auto) lines.push('Scheduled automatically by the Semestre planner.')
-  return lines.join('\n')
-}
 
 const titled = (course: Course | undefined, title: string) =>
   course ? `${course.code} · ${title}` : title
@@ -245,6 +242,8 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
   expiresAt: null,
   error: null,
   calendarSync: { status: 'idle' },
+  calendars: [],
+  calendarsLoading: false,
 
   init: (clientId) => {
     const id = clientId.trim()
@@ -332,6 +331,18 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
     toast.info('Disconnected from Google')
   },
 
+  loadCalendars: async () => {
+    if (!get().signedIn) return
+    set({ calendarsLoading: true })
+    try {
+      // Only calendars the user can write to — a subscribed feed would 403.
+      const calendars = await authed((token) => listCalendars(token, 'writer'))
+      set({ calendars, calendarsLoading: false })
+    } catch (err) {
+      set({ calendarsLoading: false, error: messageOf(err) })
+    }
+  },
+
   syncCalendar: async () => {
     if (!get().signedIn) {
       const message = 'Connect your Google account first.'
@@ -346,10 +357,13 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
     set({ calendarSync: { status: 'syncing' } })
     try {
       const counts = await authed(async (token) => {
-        const store = useStore.getState()
-        const calendarId = await ensureStudyCalendar(token, store.db.settings.studyCalendarId)
-        if (calendarId !== store.db.settings.studyCalendarId) {
-          useStore.getState().updateSettings({ studyCalendarId: calendarId })
+        const calendarId = useStore.getState().db.settings.studyCalendarId
+        if (!calendarId) throw new Error(NO_CALENDAR)
+        // The user may have deleted it in Google since choosing it. Forget the
+        // dead id rather than writing somewhere they did not pick.
+        if (!(await verifyCalendar(token, calendarId))) {
+          useStore.getState().updateSettings({ studyCalendarId: undefined })
+          throw new Error(NO_CALENDAR)
         }
 
         const courses = new Map(useStore.getState().db.courses.map((c) => [c.id, c]))
@@ -408,34 +422,14 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
           written += 1
         }
 
+        // Study blocks are no longer mirrored. Any this app pushed before that
+        // decision are taken back out, so nothing is left orphaned in Google.
+        // After one sync there is nothing left to find.
         for (const b of useStore.getState().db.studyBlocks) {
-          const course = b.courseId ? courses.get(b.courseId) : undefined
-
-          if (b.status === 'skipped') {
-            if (b.calendarEventId) {
-              await deleteEvent(token, calendarId, b.calendarEventId)
-              useStore.getState().updateStudyBlock(b.id, { calendarEventId: undefined })
-              removed += 1
-            }
-            continue
-          }
-
-          const startMs = Date.parse(b.startsAt)
-          const endMs = Date.parse(b.endsAt)
-          if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) continue
-
-          const eventId = await upsertEvent(token, calendarId, {
-            id: b.calendarEventId,
-            summary: titled(course, b.title),
-            description: blockDescription(b, course),
-            start: new Date(startMs).toISOString(),
-            end: new Date(endMs).toISOString(),
-            colorId: '9',
-          })
-          if (eventId !== b.calendarEventId) {
-            useStore.getState().updateStudyBlock(b.id, { calendarEventId: eventId })
-          }
-          written += 1
+          if (!b.calendarEventId) continue
+          await deleteEvent(token, calendarId, b.calendarEventId)
+          useStore.getState().updateStudyBlock(b.id, { calendarEventId: undefined })
+          removed += 1
         }
 
         return { written, removed }
@@ -459,14 +453,8 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
     try {
       return await authed(async (token) => {
         const calendars = await listCalendars(token)
-        // Skip our own study calendar. The planner treats everything returned
-        // here as busy time, and its own study blocks are not busy — including
-        // them would make each re-plan dodge the slots it just picked.
-        const ownId = useStore.getState().db.settings.studyCalendarId
         const perCalendar = await Promise.all(
-          calendars
-            .filter((cal) => cal.id !== ownId)
-            .map(async (cal) => {
+          calendars.map(async (cal) => {
             try {
               return await listEvents(token, cal.id, fromISO, toISO)
             } catch {
@@ -475,7 +463,19 @@ export const useGoogle = create<GoogleState>()((set, get) => ({
             }
           }),
         )
-        return perCalendar.flat().sort((a, b) => a.start.localeCompare(b.start))
+        // Drop the deadlines this app pushed, by event id rather than by
+        // calendar: the target may well be the user's main calendar, and
+        // skipping the whole of it would hide every real event they have.
+        const db = useStore.getState().db
+        const mine = new Set(
+          [...db.assessments, ...db.studyBlocks]
+            .map((row) => row.calendarEventId)
+            .filter((id): id is string => Boolean(id)),
+        )
+        return perCalendar
+          .flat()
+          .filter((e) => !mine.has(e.id))
+          .sort((a, b) => a.start.localeCompare(b.start))
       })
     } catch (err) {
       set({ error: messageOf(err) })

@@ -97,6 +97,13 @@ export interface AppState {
 
   updatePreferences: (patch: Partial<StudyPreferences>) => void
   updateSettings: (patch: Partial<Settings>) => void
+  /**
+   * Point calendar sync at a different calendar, retiring what was written to
+   * the old one. Never call `updateSettings({ studyCalendarId })` directly:
+   * the event ids on each assessment belong to whichever calendar they were
+   * written to, so a bare switch abandons them there forever.
+   */
+  setStudyCalendar: (id: string | undefined) => void
 
   /** Drained by the calendar sync so orphaned remote events get cleaned up. */
   queueEventDeletion: (entry: PendingEventDeletion) => void
@@ -120,6 +127,7 @@ export function registerBackup(fn: () => void) {
 const scheduleBackup = () => backup?.()
 
 /** Remember a remote event that must be deleted on the next calendar sync. */
+/** Only assessments are mirrored, so only their events need retiring. */
 function queueDeletion(db: Database, eventId: string) {
   const calendarId = db.settings.studyCalendarId
   if (!calendarId) return
@@ -181,11 +189,6 @@ export const useStore = create<AppState>()((set, get) => {
         const courseIds = new Set(db.courses.filter((c) => c.semesterId === id).map((c) => c.id))
         for (const a of db.assessments) {
           if (courseIds.has(a.courseId) && a.calendarEventId) queueDeletion(db, a.calendarEventId)
-        }
-        for (const b of db.studyBlocks) {
-          if (b.courseId && courseIds.has(b.courseId) && b.calendarEventId) {
-            queueDeletion(db, b.calendarEventId)
-          }
         }
         db.semesters = db.semesters.filter((s) => s.id !== id)
         db.courses = db.courses.filter((c) => c.semesterId !== id)
@@ -323,9 +326,6 @@ export const useStore = create<AppState>()((set, get) => {
         for (const a of db.assessments) {
           if (a.courseId === id && a.calendarEventId) queueDeletion(db, a.calendarEventId)
         }
-        for (const b of db.studyBlocks) {
-          if (b.courseId === id && b.calendarEventId) queueDeletion(db, b.calendarEventId)
-        }
         db.courses = db.courses.filter((c) => c.id !== id)
         db.themes = db.themes.filter((t) => t.courseId !== id)
         db.assessments = db.assessments.filter((a) => a.courseId !== id)
@@ -350,9 +350,6 @@ export const useStore = create<AppState>()((set, get) => {
       commit((db) => {
         const gone = db.assessments.find((a) => a.id === id)
         if (gone?.calendarEventId) queueDeletion(db, gone.calendarEventId)
-        for (const b of db.studyBlocks) {
-          if (b.assessmentId === id && b.calendarEventId) queueDeletion(db, b.calendarEventId)
-        }
         db.assessments = db.assessments.filter((a) => a.id !== id)
         db.studyBlocks = db.studyBlocks.filter((b) => b.assessmentId !== id)
         db.tasks = db.tasks.map((t) =>
@@ -406,17 +403,12 @@ export const useStore = create<AppState>()((set, get) => {
       }),
     deleteStudyBlock: (id) =>
       commit((db) => {
-        const gone = db.studyBlocks.find((b) => b.id === id)
-        if (gone?.calendarEventId) queueDeletion(db, gone.calendarEventId)
         db.studyBlocks = db.studyBlocks.filter((b) => b.id !== id)
       }),
     replaceAutoBlocks: (blocks) =>
       commit((db) => {
         // Keep manual blocks and anything already completed — only pending
         // auto-planned blocks are regenerated.
-        for (const b of db.studyBlocks) {
-          if (b.auto && b.status === 'planned' && b.calendarEventId) queueDeletion(db, b.calendarEventId)
-        }
         db.studyBlocks = [
           ...db.studyBlocks.filter((b) => !b.auto || b.status !== 'planned'),
           ...blocks.map((b) => ({
@@ -430,9 +422,6 @@ export const useStore = create<AppState>()((set, get) => {
       }),
     clearAutoBlocks: () =>
       commit((db) => {
-        for (const b of db.studyBlocks) {
-          if (b.auto && b.status === 'planned' && b.calendarEventId) queueDeletion(db, b.calendarEventId)
-        }
         db.studyBlocks = db.studyBlocks.filter((b) => !b.auto || b.status !== 'planned')
       }),
 
@@ -481,6 +470,45 @@ export const useStore = create<AppState>()((set, get) => {
     updateSettings: (patch) =>
       commit((db) => {
         db.settings = { ...db.settings, ...patch }
+      }),
+
+    setStudyCalendar: (id) =>
+      commit((db) => {
+        const previous = db.settings.studyCalendarId
+        if (previous === id) return
+        if (previous) {
+          // Queue against the calendar the events actually live in — a pending
+          // entry carries its own calendarId, so the drain stays correct even
+          // after the setting has moved on. Without this the old calendar keeps
+          // every event with nothing left pointing at it.
+          for (const a of db.assessments) {
+            if (!a.calendarEventId) continue
+            if (!db.pendingCalendarDeletions.some((p) => p.eventId === a.calendarEventId)) {
+              db.pendingCalendarDeletions = [
+                ...db.pendingCalendarDeletions,
+                { calendarId: previous, eventId: a.calendarEventId },
+              ]
+            }
+          }
+          db.assessments = db.assessments.map((a) =>
+            a.calendarEventId ? { ...a, calendarEventId: undefined } : a,
+          )
+          // Study blocks are no longer mirrored, but older ones may still hold
+          // an id from when they were.
+          for (const b of db.studyBlocks) {
+            if (!b.calendarEventId) continue
+            if (!db.pendingCalendarDeletions.some((p) => p.eventId === b.calendarEventId)) {
+              db.pendingCalendarDeletions = [
+                ...db.pendingCalendarDeletions,
+                { calendarId: previous, eventId: b.calendarEventId },
+              ]
+            }
+          }
+          db.studyBlocks = db.studyBlocks.map((b) =>
+            b.calendarEventId ? { ...b, calendarEventId: undefined } : b,
+          )
+        }
+        db.settings = { ...db.settings, studyCalendarId: id }
       }),
 
     queueEventDeletion: (entry) =>
